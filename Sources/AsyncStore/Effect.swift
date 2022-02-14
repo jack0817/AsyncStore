@@ -10,7 +10,7 @@ import Foundation
 extension AsyncStore {
     enum Effect {
         case none
-        case set(setter: (inout State) -> Void)
+        case set((inout State) -> Void)
         case task(operation: () async throws -> Effect, id: AnyHashable?)
         case sleep(TimeInterval)
         case merge(effects: [Effect])
@@ -19,10 +19,6 @@ extension AsyncStore {
 }
 
 extension AsyncStore.Effect {
-    static func set(_ setter: @escaping (inout State) -> Void) -> Self {
-        .set(setter: setter)
-    }
-    
     static func task(
         _ operation: @escaping () async throws -> Self,
         _ id: AnyHashable? = .none

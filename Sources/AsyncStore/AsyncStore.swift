@@ -6,9 +6,11 @@
 //
 
 import Foundation
+import CoreText
 
 // MARK: Store
 
+@dynamicMemberLookup
 public final class AsyncStore<State, Environment>: ObservableObject {
     private var _state: State
     private let _env: Environment
@@ -20,6 +22,18 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self._state = state
         self._env = env
         self._mapError = mapError
+    }
+    
+    var state: State {
+        get { _state }
+    }
+    
+    var env: Environment {
+        get { _env }
+    }
+    
+    subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
+        get { _state[keyPath: dynamicMember] }
     }
     
     func receive(_ effect: Effect) {
