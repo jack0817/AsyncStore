@@ -66,6 +66,8 @@ extension AsyncStore {
                 let effect = _mapError(error)
                 await reduce(effect)
             }
+        case .cancel(let id):
+            await cancelActor.cancel(id)
         case .merge(let effects):
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in

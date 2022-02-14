@@ -13,6 +13,7 @@ extension AsyncStore {
         case set((inout State) -> Void)
         case task(operation: () async throws -> Effect, id: AnyHashable?)
         case sleep(TimeInterval)
+        case cancel(AnyHashable)
         case merge(effects: [Effect])
         case concatenate(effects: [Effect])
     }

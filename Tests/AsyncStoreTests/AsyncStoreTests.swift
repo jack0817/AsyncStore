@@ -170,4 +170,40 @@ final class AsyncStoreTests: XCTestCase {
         
         XCTAssertEqual(store.ints, expectedInts)
     }
+    
+    func testCancelEffect()  {
+        let operation1: () async throws -> TestStore.Effect = {
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            return .none
+        }
+        
+        let expectation = XCTestExpectation(description: #function)
+        expectation.expectedFulfillmentCount = 2
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { error in
+                switch error {
+                case is CancellationError:
+                    expectation.fulfill()
+                default:
+                    break
+                }
+                return .none
+            }
+        )
+        
+        let taskId = "CancelledTask"
+        
+        store.receive(
+            .merge(
+                .task(operation: operation1, id: taskId),
+                .task(operation: operation1, id: taskId),
+                .cancel(taskId)
+            )
+        )
+        
+        wait(for: [expectation], timeout: 5.0)
+    }
 }
