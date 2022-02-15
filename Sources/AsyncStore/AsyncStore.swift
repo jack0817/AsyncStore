@@ -24,19 +24,19 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self._mapError = mapError
     }
     
-    var state: State {
+    public var state: State {
         get { _state }
     }
     
-    var env: Environment {
+    public var env: Environment {
         get { _env }
     }
     
-    subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
+    public subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
         get { _state[keyPath: dynamicMember] }
     }
     
-    func receive(_ effect: Effect) {
+    public func receive(_ effect: Effect) {
         Task { await reduce(effect) }
     }
 }

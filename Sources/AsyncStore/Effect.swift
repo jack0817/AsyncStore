@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension AsyncStore {
+public extension AsyncStore {
     enum Effect {
         case none
         case set((inout State) -> Void)
