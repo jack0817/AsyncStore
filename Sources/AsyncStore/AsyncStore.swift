@@ -106,11 +106,7 @@ extension AsyncStore {
         objectWillChange.send()
         setter(&_state)
     }
-}
-
-// MARK: Binding
-
-extension AsyncStore {
+    
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
         let id = UUID().uuidString
         let finish = { [weak self] in
@@ -130,6 +126,23 @@ extension AsyncStore {
         Task { await continuationActor.yieldForEach(_state) }
     }
     
+    private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
+        Task {
+            do {
+                for try await effect in effectStream {
+                    await reduce(effect)
+                }
+            } catch let error {
+                let effect = _mapError(error)
+                await reduce(effect)
+            }
+        }
+    }
+}
+
+// MARK: Binding
+
+public extension AsyncStore {
     func bind<UState, UEnv, Value>(
         id: AnyHashable,
         to upstreamStore: AsyncStore<UState, UEnv>,
@@ -159,18 +172,5 @@ extension AsyncStore {
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
         Task { await cancelActor.store(id, cancel: bindTask.cancel) }
-    }
-    
-    private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
-        Task {
-            do {
-                for try await effect in effectStream {
-                    await reduce(effect)
-                }
-            } catch let error {
-                let effect = _mapError(error)
-                await reduce(effect)
-            }
-        }
     }
 }
