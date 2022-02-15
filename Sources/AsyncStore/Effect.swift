@@ -19,7 +19,7 @@ public extension AsyncStore {
     }
 }
 
-extension AsyncStore.Effect {
+public extension AsyncStore.Effect {
     static func task(
         _ operation: @escaping () async throws -> Self,
         _ id: AnyHashable? = .none
