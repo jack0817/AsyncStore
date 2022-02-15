@@ -27,6 +27,14 @@ public extension AsyncStore.Effect {
         .task(operation: operation, id: id)
     }
     
+    static func dataTask<Data>(
+        _ data: Data,
+        _ operation: @escaping (Data) async throws -> Self,
+        _ id: AnyHashable? = .none
+    ) -> Self {
+        .task(operation: { try await operation(data) }, id: id)
+    }
+    
     static func merge(_ effects: Self ...) -> Self {
         .merge(effects: effects)
     }
