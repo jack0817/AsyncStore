@@ -154,7 +154,7 @@ final class AsyncStoreTests: XCTestCase {
             try await Task.trySleep(for: 0.2)
             return .set { $0.ints.append(value) }
         }
-        
+
         let store = TestStore(
             state: .init(),
             env: .init(),
@@ -162,18 +162,18 @@ final class AsyncStoreTests: XCTestCase {
                 return .none
             }
         )
-        
+
         let waiter = StoreWaiter(store: store, count: 1)
-        
+
         let taskId = "CancelledTask"
-        
+
         store.receive(
             .merge(
                 .dataTask(1, dataOperation, taskId),
                 .dataTask(2, dataOperation, taskId)
             )
         )
-        
+
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
     }
