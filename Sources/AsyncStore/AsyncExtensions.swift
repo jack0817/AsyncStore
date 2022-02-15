@@ -90,7 +90,7 @@ extension AsyncSequence where Element: Equatable {
 
 // MARK: Extensions
 
-extension Task where Success == Never, Failure == Never {
+public extension Task where Success == Never, Failure == Never {
     static func trySleep(for timeInterval: TimeInterval?) async throws {
         guard let delay = timeInterval else { return }
         try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
