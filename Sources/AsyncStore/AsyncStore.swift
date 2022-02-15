@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import CoreText
+import SwiftUI
 
 // MARK: Store
 
@@ -39,6 +39,20 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     public func receive(_ effect: Effect) {
         Task { await reduce(effect) }
     }
+    
+    public func binding<Value>(for keyPath: WritableKeyPath<State, Value>) -> Binding<Value> {
+        let defaultValue = _state[keyPath: keyPath]
+        return .init(
+            get: { [weak self] in
+                guard let self = self else { return defaultValue }
+                return self._state[keyPath: keyPath]
+            },
+            set: { [weak self] value in
+                guard let self = self else { return }
+                self.objectWillChange { $0[keyPath: keyPath] = value }
+            }
+        )
+    }
 }
 
 // MARK: Reducer
@@ -50,7 +64,6 @@ extension AsyncStore {
             break
         case .set(let setter):
             await setOnMain(setter)
-            send(_state)
         case .task(let operation, let id):
             await cancelActor.cancel(id)
             let task = Task {
@@ -102,9 +115,14 @@ extension AsyncStore {
         }
     }
     
-    @MainActor private func setOnMain(_ setter: @escaping (inout State) -> Void) {
+    @MainActor private func setOnMain(_ setter: @escaping (inout State) -> Void) async {
+        objectWillChange(setter)
+    }
+    
+    private func objectWillChange(_ setter: @escaping (inout State) -> Void) {
         objectWillChange.send()
         setter(&_state)
+        Task { await continuationActor.yieldForEach(_state) }
     }
     
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
@@ -120,10 +138,6 @@ extension AsyncStore {
         }
         
         return (stream, finish)
-    }
-    
-    private func send(_ state: State) {
-        Task { await continuationActor.yieldForEach(_state) }
     }
     
     private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
