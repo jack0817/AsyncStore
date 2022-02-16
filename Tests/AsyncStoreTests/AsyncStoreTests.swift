@@ -178,3 +178,4 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(store.ints, expectedInts)
     }
 }
+

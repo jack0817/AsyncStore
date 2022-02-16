@@ -11,12 +11,12 @@ import SwiftUI
 // MARK: Store
 
 @dynamicMemberLookup
-@MainActor public final class AsyncStore<State, Environment>: ObservableObject {
+public final class AsyncStore<State, Environment>: ObservableObject {
     private var _state: State
     private let _env: Environment
     private let _mapError: (Error) -> Effect
-    private var cancellables: [AnyHashable: () -> Void] = [:]
-    private var downstreams: [AnyHashable: AsyncStream<State>.Continuation] = [:]
+    private let cancelActor = CancelActor()
+    private let continuationActor = ContinuationActor<State>()
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -63,14 +63,14 @@ extension AsyncStore {
         case .none:
             break
         case .set(let setter):
-            objectWillChange(setter)
+            await setOnMain(setter)
         case .task(let operation, let id):
-            cancel(id)
+            await cancelActor.cancel(id)
             let task = Task {
                 let effect = await execute(operation)
                 await reduce(effect)
             }
-            store(id, cancel: task.cancel)
+            await cancelActor.store(id, cancel: task.cancel)
             await task.value
         case .sleep(let time):
             do {
@@ -80,7 +80,7 @@ extension AsyncStore {
                 await reduce(effect)
             }
         case .cancel(let id):
-            cancel(id)
+            await cancelActor.cancel(id)
         case .merge(let effects):
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
@@ -107,16 +107,6 @@ extension AsyncStore {
 // MARK: Private API
 
 extension AsyncStore {
-    private func cancel(_ id: AnyHashable?) {
-        guard let id = id else { return }
-        cancellables[id]?()
-    }
-    
-    private func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
-        guard let id = id else { return }
-        cancellables[id] = cancel
-    }
-    
     private func execute(_ operation: () async throws -> Effect) async -> Effect {
         do {
             return try await operation()
@@ -125,39 +115,25 @@ extension AsyncStore {
         }
     }
     
+    @MainActor private func setOnMain(_ setter: @escaping (inout State) -> Void) async {
+        objectWillChange(setter)
+    }
+    
     private func objectWillChange(_ setter: @escaping (inout State) -> Void) {
         objectWillChange.send()
         setter(&_state)
-        send()
-    }
-    
-    private func send() {
-        var terminatedIds: [AnyHashable] = []
-        
-        downstreams.forEach { (id, cont) in
-            let result = cont.yield(_state)
-            switch result {
-            case .terminated:
-                cont.finish()
-                terminatedIds.append(id)
-            default:
-                break
-            }
-        }
-        
-        terminatedIds.forEach { downstreams[$0] = .none }
+        Task { await continuationActor.yieldForEach(_state) }
     }
     
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
         let id = UUID().uuidString
         let finish = { [weak self] in
             guard let self = self else { return }
-            self.downstreams[id]?.finish()
-            self.downstreams[id] = .none
+            Task { await self.continuationActor.finish(id) }
         }
         
         let stream = AsyncStream<State> { cont in
-            downstreams[id] = cont
+            Task { await continuationActor.store(id, continuation: cont) }
             cont.yield(_state)
         }
         
@@ -193,7 +169,7 @@ public extension AsyncStore {
             .map(mapEffect)
             
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancellables[id] = bindTask.cancel
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
     }
     
     func bind<UState, UEnv, Value>(
@@ -209,6 +185,6 @@ public extension AsyncStore {
             .map(mapEffect)
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancellables[id] = bindTask.cancel
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
     }
 }
