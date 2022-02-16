@@ -1,7 +1,6 @@
 import XCTest
 @testable import AsyncStore
 
-@MainActor
 final class AsyncStoreTests: XCTestCase {
     struct TestState: Equatable {
         var value = ""
@@ -45,20 +44,19 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(store.env, expectedEnvironment)
     }
     
-    func testSetEffect() async {
+    func testSetEffect() async throws {
         let store = AsyncStore(
             state: TestState(),
             env: TestEnvironment(),
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let waiter = StoreWaiter(store: store)
         
         let expectedValue = "New Value"
         store.receive(.set { $0.value = expectedValue })
         
-        await waiter.wait(timeout: 5.0)
-        
+        await waiter.waitForObjectWillChange(count: 1, timeout: 5.0)
         XCTAssertEqual(store.value, expectedValue)
     }
     
@@ -77,12 +75,11 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let waiter = StoreWaiter(store: store)
         
         store.receive(.task(operation))
         
-        await waiter.wait(timeout: 5.0
-        )
+        await waiter.waitForObjectWillChange(count: 1, timeout: 5.0)
         XCTAssertEqual(count, expectedCount)
         XCTAssertEqual(store.value, expectedValue)
     }
@@ -105,7 +102,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let waiter = StoreWaiter(store: store)
         
         store.receive(
             .merge(
@@ -114,7 +111,7 @@ final class AsyncStoreTests: XCTestCase {
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        await waiter.waitForObjectWillChange(count: 2, timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
     }
     
@@ -135,7 +132,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let waiter = StoreWaiter(store: store)
         
         store.receive(
             .concatenate(
@@ -144,17 +141,17 @@ final class AsyncStoreTests: XCTestCase {
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        await waiter.waitForObjectWillChange(count: 2, timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
     }
     
     func testCancelEffect() async  {
         let expectedInts = [2]
         let dataOperation: (Int) async throws -> TestStore.Effect = { value in
-            try await Task.trySleep(for: 0.2)
+            try await Task.trySleep(for: 0.1)
             return .set { $0.ints.append(value) }
         }
-
+        
         let store = TestStore(
             state: .init(),
             env: .init(),
@@ -162,19 +159,19 @@ final class AsyncStoreTests: XCTestCase {
                 return .none
             }
         )
-
-        let waiter = StoreWaiter(store: store, count: 1)
-
+        
+        let waiter = StoreWaiter(store: store)
+        
         let taskId = "CancelledTask"
-
+        
         store.receive(
             .merge(
                 .dataTask(1, dataOperation, taskId),
                 .dataTask(2, dataOperation, taskId)
             )
         )
-
-        await waiter.wait(timeout: 5.0)
+        
+        await waiter.waitForObjectWillChange(count: 1, timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
     }
 }

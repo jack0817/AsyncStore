@@ -43,31 +43,3 @@ public extension AsyncStore.Effect {
         .concatenate(effects: effects)
     }
 }
-
-extension AsyncStore.Effect: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .none:
-            return "None"
-        case .set:
-            return "Set(\(State.self))"
-        case .task(_, let id):
-            switch id {
-            case .some(let id):
-                return "Task(\(id))"
-            default:
-                return "Task"
-            }
-        case .sleep(let time):
-            return "Sleep(\(time))"
-        case .cancel(let id):
-            return "Cancel(\(id))"
-        case .merge(let effects):
-            let effectsDesc = effects.map(\.description).split(separator: ", ")
-            return "Merge(\(effectsDesc))"
-        case .concatenate(let effects):
-            let effectsDesc = effects.map(\.description).split(separator: ", ")
-            return "Concatenate(\(effectsDesc))"
-        }
-    }
-}

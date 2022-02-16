@@ -9,50 +9,43 @@ import Foundation
 import Combine
 import XCTest
 @testable import AsyncStore
-import SwiftUI
 
-final class StoreWaiter<State, Env> {
-    let count: Int
-    private var currentCount = 0
-    private var cancellable: AnyCancellable! = .none
-    private var counterTask: Task<Void, Never>! = .none
-    private var waitTask: Task<Void, Never>? = .none
+actor StoreWaiter<State, Environment> {
+    let store: AsyncStore<State, Environment>
     
-    init(store: AsyncStore<State, Env>, count: Int) {
-        self.count = count
-        
-        let stream = AsyncStream<Void> { cont in
-            cancellable = store.objectWillChange
-                .sink { _ in
-                    cont.yield(())
-                }
-        }
-        
-        counterTask = Task {
-            for await _ in stream {
-                currentCount += 1
-                if currentCount >= count {
-                    waitTask?.cancel()
-                }
-            }
-        }
+    init(store: AsyncStore<State, Environment>) {
+        self.store = store
     }
     
-    deinit {
-        cancellable?.cancel()
-        counterTask?.cancel()
-        waitTask?.cancel()
-    }
-    
-    func wait(timeout: TimeInterval) async {
-        guard currentCount < count else { return }
-        waitTask = Task {
+    func waitForObjectWillChange(
+        count: Int,
+        timeout: TimeInterval
+    ) async {
+        var currentCount = 0
+        var cancellable: AnyCancellable? = .none
+        
+        let timeoutTask = Task {
+            guard !Task.isCancelled else { return }
             try? await Task.trySleep(for: timeout)
         }
         
-        await waitTask?.value
-        if currentCount < count {
-            XCTFail("Store timed out after \(timeout) seconds. Count:\(currentCount)")
+        cancellable = store.objectWillChange
+            .sink { _ in
+                guard !timeoutTask.isCancelled else { return }
+                currentCount += 1
+                if currentCount == count {
+                    timeoutTask.cancel()
+                }
+            }
+        
+        await timeoutTask.value
+        cancellable?.cancel()
+        
+        switch currentCount {
+        case count:
+            break
+        default:
+            XCTFail("Store (\(type(of: store)) timed out after \(timeout) seconds. Count:\(currentCount)")
         }
     }
 }
