@@ -1,6 +1,6 @@
 //
 //  StoreWaiter.swift
-//  
+//
 //
 //  Created by Wendell Thompson (AO) on 2/15/22.
 //
@@ -56,3 +56,4 @@ final class StoreWaiter<State, Env> {
         }
     }
 }
+
