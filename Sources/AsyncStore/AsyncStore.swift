@@ -157,6 +157,16 @@ extension AsyncStore {
 // MARK: Binding
 
 public extension AsyncStore {
+    func bind<Value>(id: AnyHashable, to keyPath: KeyPath<State, Value>, mapEffect: @escaping (Value) -> Effect) {
+        let stream = createDownstream()
+        let effectStream = stream.stream
+            .map { $0[keyPath: keyPath] }
+            .map(mapEffect)
+        
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
+    }
+    
     func bind<UState, UEnv, Value>(
         id: AnyHashable,
         to upstreamStore: AsyncStore<UState, UEnv>,
