@@ -172,21 +172,6 @@ public extension AsyncStore {
         to upstreamStore: AsyncStore<UState, UEnv>,
         on keyPath: KeyPath<UState, Value>,
         mapEffect: @escaping (Value) -> Effect
-    ) {
-        let upstream = upstreamStore.createDownstream()
-        let effectStream = upstream.stream
-            .map { $0[keyPath: keyPath] }
-            .map(mapEffect)
-            
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
-    }
-    
-    func bind<UState, UEnv, Value>(
-        id: AnyHashable,
-        to upstreamStore: AsyncStore<UState, UEnv>,
-        on keyPath: KeyPath<UState, Value>,
-        mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
         let upstream = upstreamStore.createDownstream()
         let effectStream = upstream.stream
