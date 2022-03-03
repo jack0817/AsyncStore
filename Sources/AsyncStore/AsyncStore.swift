@@ -157,10 +157,15 @@ extension AsyncStore {
 // MARK: Binding
 
 public extension AsyncStore {
-    func bind<Value>(id: AnyHashable, to keyPath: KeyPath<State, Value>, mapEffect: @escaping (Value) -> Effect) {
+    func bind<Value>(
+        id: AnyHashable,
+        to keyPath: KeyPath<State, Value>,
+        mapEffect: @escaping (Value) -> Effect
+    ) where Value: Equatable {
         let stream = createDownstream()
         let effectStream = stream.stream
             .map { $0[keyPath: keyPath] }
+            .removeDuplicates()
             .map(mapEffect)
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
