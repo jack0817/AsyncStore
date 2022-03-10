@@ -172,6 +172,19 @@ public extension AsyncStore {
         Task { await cancelActor.store(id, cancel: bindTask.cancel) }
     }
     
+    func bind<Value, Stream: AsyncSequence>(
+        id: AnyHashable,
+        to stream: Stream,
+        mapEffect: @escaping (Value) -> Effect
+    ) where Value: Equatable, Stream.Element == Value{
+        let effectStream = stream
+            .removeDuplicates()
+            .map(mapEffect)
+        
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
+    }
+    
     func bind<UState, UEnv, Value>(
         id: AnyHashable,
         to upstreamStore: AsyncStore<UState, UEnv>,
