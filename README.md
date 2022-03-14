@@ -1,2 +1,2 @@
 # AsyncStore
-And Effect driven framework utilizing Structured Concurrency
+An Effect driven framework utilizing Structured Concurrency
