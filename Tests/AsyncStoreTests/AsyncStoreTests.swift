@@ -172,5 +172,60 @@ final class AsyncStoreTests: XCTestCase {
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
     }
+    
+    func testBindToKeyPath() async {
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        await store.bind(
+            id: "asyncBind",
+            to: \.ints,
+            mapEffect: { ints in
+                .set{ $0.value = ints.map(String.init).joined() }
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 2)
+        store.receive(.set({ $0.ints = [1, 2] }))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, "12")
+    }
+    
+    func testBindToParentStore() async {
+        let exptectedValue = "Parent"
+        
+        let parentStore = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        await store.bind(
+            id: "asyncBind",
+            to: parentStore,
+            on: \.value,
+            mapEffect: { parentValue in .set { $0.value = parentValue } }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        parentStore.receive(.set({ $0.value = exptectedValue }))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, exptectedValue)
+    }
 }
 

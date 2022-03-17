@@ -17,6 +17,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelActor = CancelActor()
     private let continuationActor = ContinuationActor<State>()
+    private let stateDistributor = AsyncDistributor<State>()
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -122,14 +123,14 @@ extension AsyncStore {
     private func objectWillChange(_ setter: @escaping (inout State) -> Void) {
         objectWillChange.send()
         setter(&_state)
-        Task { await continuationActor.yieldForEach(_state) }
+        Task { await stateDistributor.yield(_state) }
     }
     
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
         let id = UUID().uuidString
         let finish = { [weak self] in
             guard let self = self else { return }
-            Task { await self.continuationActor.finish(id) }
+            Task { await self.stateDistributor.finish(id) }
         }
         
         let stream = AsyncStream<State> { cont in
@@ -161,9 +162,9 @@ public extension AsyncStore {
         id: AnyHashable,
         to keyPath: KeyPath<State, Value>,
         mapEffect: @escaping (Value) -> Effect
-    ) where Value: Equatable {
-        let stream = createDownstream()
-        let effectStream = stream.stream
+    ) async where Value: Equatable {
+        let stream = await stateDistributor.stream(for: id, .bufferingNewest(1))
+        let effectStream = stream
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
             .map(mapEffect)
@@ -185,6 +186,41 @@ public extension AsyncStore {
         Task { await cancelActor.store(id, cancel: bindTask.cancel) }
     }
     
+    func bind<UState, UEnv, Value>(
+        id: AnyHashable,
+        to upstreamStore: AsyncStore<UState, UEnv>,
+        on keyPath: KeyPath<UState, Value>,
+        mapEffect: @escaping (Value) -> Effect
+    ) async where Value: Equatable {
+        let upstream = await upstreamStore.stateDistributor.stream(for: id, .bufferingNewest(1))
+        let effectStream = upstream
+            .map { $0[keyPath: keyPath] }
+            .removeDuplicates()
+            .map(mapEffect)
+        
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
+    }
+}
+
+public extension AsyncStore {
+    @available(*, deprecated, message: "Use the async version of this func")
+    func bind<Value>(
+        id: AnyHashable,
+        to keyPath: KeyPath<State, Value>,
+        mapEffect: @escaping (Value) -> Effect
+    ) where Value: Equatable {
+        let stream = createDownstream()
+        let effectStream = stream.stream
+            .map { $0[keyPath: keyPath] }
+            .removeDuplicates()
+            .map(mapEffect)
+        
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        Task { await cancelActor.store(id, cancel: bindTask.cancel) }
+    }
+    
+    @available(*, deprecated, message: "Use the async version of this func")
     func bind<UState, UEnv, Value>(
         id: AnyHashable,
         to upstreamStore: AsyncStore<UState, UEnv>,
