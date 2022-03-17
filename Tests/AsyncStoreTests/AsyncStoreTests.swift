@@ -1,7 +1,6 @@
 import XCTest
 @testable import AsyncStore
 
-@MainActor
 final class AsyncStoreTests: XCTestCase {
     struct TestState: Equatable {
         var value = ""
@@ -151,7 +150,7 @@ final class AsyncStoreTests: XCTestCase {
     func testCancelEffect() async  {
         let expectedInts = [2]
         let dataOperation: (Int) async throws -> TestStore.Effect = { value in
-            try await Task.trySleep(for: 0.2)
+            try await Task.trySleep(for: 1.0)
             return .set { $0.ints.append(value) }
         }
 
@@ -167,15 +166,66 @@ final class AsyncStoreTests: XCTestCase {
 
         let taskId = "CancelledTask"
 
-        store.receive(
-            .merge(
-                .dataTask(1, dataOperation, taskId),
-                .dataTask(2, dataOperation, taskId)
-            )
-        )
+        store.receive(.dataTask(1, dataOperation, taskId))
+        store.receive(.dataTask(2, dataOperation, taskId))
 
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
+    }
+    
+    func testBindToKeyPath() async {
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        await store.bind(
+            id: "asyncBind",
+            to: \.ints,
+            mapEffect: { ints in
+                .set{ $0.value = ints.map(String.init).joined() }
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 2)
+        store.receive(.set({ $0.ints = [1, 2] }))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, "12")
+    }
+    
+    func testBindToParentStore() async {
+        let exptectedValue = "Parent"
+        
+        let parentStore = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        await store.bind(
+            id: "asyncBind",
+            to: parentStore,
+            on: \.value,
+            mapEffect: { parentValue in .set { $0.value = parentValue } }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        parentStore.receive(.set({ $0.value = exptectedValue }))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, exptectedValue)
     }
 }
 
