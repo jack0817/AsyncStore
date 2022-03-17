@@ -1,7 +1,6 @@
 import XCTest
 @testable import AsyncStore
 
-@MainActor
 final class AsyncStoreTests: XCTestCase {
     struct TestState: Equatable {
         var value = ""
@@ -151,7 +150,7 @@ final class AsyncStoreTests: XCTestCase {
     func testCancelEffect() async  {
         let expectedInts = [2]
         let dataOperation: (Int) async throws -> TestStore.Effect = { value in
-            try await Task.trySleep(for: 0.2)
+            try await Task.trySleep(for: 1.0)
             return .set { $0.ints.append(value) }
         }
 
@@ -167,12 +166,8 @@ final class AsyncStoreTests: XCTestCase {
 
         let taskId = "CancelledTask"
 
-        store.receive(
-            .merge(
-                .dataTask(1, dataOperation, taskId),
-                .dataTask(2, dataOperation, taskId)
-            )
-        )
+        store.receive(.dataTask(1, dataOperation, taskId))
+        store.receive(.dataTask(2, dataOperation, taskId))
 
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)

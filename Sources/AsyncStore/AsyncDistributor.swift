@@ -6,36 +6,38 @@
 //
 
 import Foundation
+import SwiftUI
 
-final class AsyncDistributor<Value> {
-    private var continuations: [AnyHashable: AsyncStream<Value>.Continuation] = [:]
+actor AsyncDistributor<Element> {
+    typealias BufferingPolicy = AsyncStream<Element>.Continuation.BufferingPolicy
     
-    func stream(
-        id: AnyHashable,
-        _ bufferingPolicy: AsyncStream<Value>.Continuation.BufferingPolicy = .unbounded
-    ) -> AsyncStream<Value> {
-        .init(bufferingPolicy: bufferingPolicy) { cont in
-            continuations[id] = cont
-        }
-    }
+    var downstreams: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
     
-    func yield(_ value: Value) {
+    func yield(_ element: Element) {
         var terminatedIds: [AnyHashable] = []
-        continuations.forEach { (id, cont) in
-            let result = cont.yield(value)
-            switch result {
+        downstreams.forEach { (id, cont) in
+            switch cont.yield(element) {
             case .terminated:
                 terminatedIds.append(id)
             default:
                 break
             }
         }
-        terminatedIds.forEach { continuations[$0] = .none }
+        terminatedIds.forEach { downstreams[$0] = .none }
     }
     
-    func cancel(id: AnyHashable) {
-        guard let cont = continuations[id] else { return }
+    func stream(
+        for id: AnyHashable,
+        _ bufferingPolicy: BufferingPolicy = .unbounded
+    ) -> AsyncStream<Element> {
+        .init(bufferingPolicy: bufferingPolicy) { cont in
+            downstreams[id] = cont
+        }
+    }
+    
+    func finish(_ id: AnyHashable) {
+        guard let cont = downstreams[id] else { return }
         cont.finish()
-        continuations[id] = .none
+        downstreams[id] = .none
     }
 }
