@@ -28,10 +28,12 @@ actor AsyncDistributor<Element> {
     
     func stream(
         for id: AnyHashable,
+        initialValue: Element,
         _ bufferingPolicy: BufferingPolicy = .unbounded
     ) -> AsyncStream<Element> {
         .init(bufferingPolicy: bufferingPolicy) { cont in
             downstreams[id] = cont
+            cont.yield(initialValue)
         }
     }
     
