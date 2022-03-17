@@ -126,7 +126,7 @@ extension AsyncStore {
         Task { await stateDistributor.yield(_state) }
     }
     
-    @available(*, deprecated, message: "Use stateDistributor")
+    @available(*, deprecated, message: "Use downstream")
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
         let id = UUID().uuidString
         let finish = { [weak self] in
@@ -136,7 +136,12 @@ extension AsyncStore {
         
         let stream = AsyncStream<State> { cont in
             Task {
-                let stateStream = await stateDistributor.stream(for: id, .bufferingNewest(1))
+                let stateStream = await stateDistributor.stream(
+                    for: id,
+                    initialValue: _state,
+                    .bufferingNewest(1)
+                )
+                
                 for await state in stateStream {
                     cont.yield(state)
                 }
@@ -144,6 +149,10 @@ extension AsyncStore {
         }
         
         return (stream, finish)
+    }
+    
+    private func downstream(for id: AnyHashable) async -> AsyncStream<State> {
+        await stateDistributor.stream(for: id, initialValue: _state, .bufferingNewest(1))
     }
     
     private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
@@ -168,7 +177,7 @@ public extension AsyncStore {
         to keyPath: KeyPath<State, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) async where Value: Equatable {
-        let stream = await stateDistributor.stream(for: id, .bufferingNewest(1))
+        let stream = await downstream(for: id)
         let effectStream = stream
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
@@ -197,7 +206,7 @@ public extension AsyncStore {
         on keyPath: KeyPath<UState, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) async where Value: Equatable {
-        let upstream = await upstreamStore.stateDistributor.stream(for: id, .bufferingNewest(1))
+        let upstream = await upstreamStore.downstream(for: id)
         let effectStream = upstream
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
