@@ -126,6 +126,7 @@ extension AsyncStore {
         Task { await stateDistributor.yield(_state) }
     }
     
+    @available(*, deprecated, message: "Use stateDistributor")
     private func createDownstream() -> (stream: AsyncStream<State>, finish: () -> Void) {
         let id = UUID().uuidString
         let finish = { [weak self] in
@@ -134,8 +135,12 @@ extension AsyncStore {
         }
         
         let stream = AsyncStream<State> { cont in
-            Task { await continuationActor.store(id, continuation: cont) }
-            cont.yield(_state)
+            Task {
+                let stateStream = await stateDistributor.stream(for: id, .bufferingNewest(1))
+                for await state in stateStream {
+                    cont.yield(state)
+                }
+            }
         }
         
         return (stream, finish)
