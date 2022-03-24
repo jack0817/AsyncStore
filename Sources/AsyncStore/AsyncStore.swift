@@ -16,7 +16,6 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _env: Environment
     private let _mapError: (Error) -> Effect
     private let cancelActor = CancelActor()
-    private let continuationActor = ContinuationActor<State>()
     private let stateDistributor = AsyncDistributor<State>()
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
