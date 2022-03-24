@@ -183,7 +183,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        await store.bind(
+        store.bind(
             id: "asyncBind",
             to: \.ints,
             mapEffect: { ints in
@@ -216,7 +216,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        await store.bind(
+        store.bind(
             id: "asyncBind",
             to: parentStore,
             on: \.value,

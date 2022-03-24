@@ -7,41 +7,59 @@
 
 import Foundation
 import SwiftUI
+import XCTest
 
-public actor AsyncDistributor<Element> {
+public struct AsyncDistributor<Element> {
+    fileprivate actor ContinuationActor {
+        private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
+        
+        func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
+            continuations[id] = stream
+        }
+        
+        func yield(_ element: Element) {
+            var terminatedIds: [AnyHashable] = []
+            continuations.forEach { (id, cont) in
+                switch cont.yield(element) {
+                case .terminated:
+                    terminatedIds.append(id)
+                default:
+                    break
+                }
+            }
+            terminatedIds.forEach { continuations[$0] = .none }
+        }
+        
+        func finish(_ id: AnyHashable) {
+            continuations[id]?.finish()
+            continuations[id] = .none
+        }
+    }
+    
     public typealias BufferingPolicy = AsyncStream<Element>.Continuation.BufferingPolicy
     
-    private var downstreams: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
+    private var contActor = ContinuationActor()
     
     public init() {}
-    
-    public func yield(_ element: Element) {
-        var terminatedIds: [AnyHashable] = []
-        downstreams.forEach { (id, cont) in
-            switch cont.yield(element) {
-            case .terminated:
-                terminatedIds.append(id)
-            default:
-                break
-            }
-        }
-        terminatedIds.forEach { downstreams[$0] = .none }
-    }
     
     public func stream(
         for id: AnyHashable,
         initialValue: Element,
-        _ bufferingPolicy: BufferingPolicy = .unbounded
+        bufferingPolicy: BufferingPolicy
     ) -> AsyncStream<Element> {
         .init(bufferingPolicy: bufferingPolicy) { cont in
-            downstreams[id] = cont
-            cont.yield(initialValue)
+            Task {
+                await contActor.add(cont, for: id)
+                cont.yield(initialValue)
+            }
         }
     }
     
+    public func yield(_ element: Element) {
+        Task { await contActor.yield(element) }
+    }
+    
     public func finish(_ id: AnyHashable) {
-        guard let cont = downstreams[id] else { return }
-        cont.finish()
-        downstreams[id] = .none
+        Task { await contActor.finish(id) }
     }
 }

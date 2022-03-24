@@ -17,9 +17,9 @@ final class AsyncDistributorTests: XCTestCase {
         let task2Id = "Task2"
         let task3Id = "Task3"
         let distributor = AsyncDistributor<String>()
-        let stream1 = await distributor.stream(for: task1Id, initialValue: "", .bufferingNewest(1))
-        let stream2 = await distributor.stream(for: task2Id, initialValue: "", .bufferingNewest(1))
-        let stream3 = await distributor.stream(for: task3Id, initialValue: "", .bufferingNewest(1))
+        let stream1 = distributor.stream(for: task1Id, initialValue: "", bufferingPolicy: .bufferingNewest(1))
+        let stream2 = distributor.stream(for: task2Id, initialValue: "", bufferingPolicy: .bufferingNewest(1))
+        let stream3 = distributor.stream(for: task3Id, initialValue: "", bufferingPolicy: .bufferingNewest(1))
         
         let task1 = Task<String, Never> {
             var text = ""
@@ -45,12 +45,12 @@ final class AsyncDistributorTests: XCTestCase {
             return text
         }
         
-        await distributor.yield(expectedValue)
-        await distributor.finish(task1Id)
-        await distributor.finish(task2Id)
+        distributor.yield(expectedValue)
+        distributor.finish(task1Id)
+        distributor.finish(task2Id)
         
-        await distributor.yield(expectedNextValue)
-        await distributor.finish(task3Id)
+        distributor.yield(expectedNextValue)
+        distributor.finish(task3Id)
         
         let actualValue1 = await task1.value
         let actualValue2 = await task2.value
