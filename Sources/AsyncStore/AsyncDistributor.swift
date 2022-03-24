@@ -13,6 +13,8 @@ public actor AsyncDistributor<Element> {
     
     private var downstreams: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
     
+    public init() {}
+    
     public func yield(_ element: Element) {
         var terminatedIds: [AnyHashable] = []
         downstreams.forEach { (id, cont) in
