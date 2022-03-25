@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftUI
-import XCTest
 
 public struct AsyncDistributor<Element> {
     fileprivate actor ContinuationActor {
