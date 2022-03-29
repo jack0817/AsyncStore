@@ -23,6 +23,7 @@ public struct AsyncCancelStore {
         
         func cancellAll() {
             cancellables.forEach { $1() }
+            cancellables = [:]
         }
     }
     

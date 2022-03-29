@@ -36,6 +36,7 @@ public struct AsyncDistributor<Element> {
         
         func finishAll() {
             continuations.forEach { $1.finish() }
+            continuations = [:]
         }
     }
     
