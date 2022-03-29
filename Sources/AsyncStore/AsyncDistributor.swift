@@ -33,6 +33,10 @@ public struct AsyncDistributor<Element> {
             continuations[id]?.finish()
             continuations[id] = .none
         }
+        
+        func finishAll() {
+            continuations.forEach { $1.finish() }
+        }
     }
     
     public typealias BufferingPolicy = AsyncStream<Element>.Continuation.BufferingPolicy
@@ -60,5 +64,9 @@ public struct AsyncDistributor<Element> {
     
     public func finish(_ id: AnyHashable) {
         Task { await contActor.finish(id) }
+    }
+    
+    public func finishAll() {
+        Task { await contActor.finishAll() }
     }
 }
