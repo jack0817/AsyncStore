@@ -96,7 +96,7 @@ extension AsyncStore {
             )
             
             await cancelStore.store(id, cancel: timer.invalidate)
-            timerQueue.sync {
+            timerQueue.async {
                 RunLoop.current.add(timer, forMode: .default)
                 RunLoop.current.run()
             }
