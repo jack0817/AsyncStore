@@ -17,15 +17,16 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
+    private let timerQueue: DispatchQueue
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
+        self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
     deinit {
-        cancelStore.cancellAll()
         stateDistributor.finishAll()
     }
     
@@ -70,12 +71,12 @@ extension AsyncStore {
         case .set(let setter):
             await setOnMain(setter)
         case .task(let operation, let id):
-            cancelStore.cancel(id)
+            await cancelStore.cancel(id)
             let task = Task {
                 let effect = await execute(operation)
                 await reduce(effect)
             }
-            cancelStore.store(id, cancel: task.cancel)
+            await cancelStore.store(id, cancel: task.cancel)
             await task.value
         case .sleep(let time):
             do {
@@ -84,8 +85,25 @@ extension AsyncStore {
                 let effect = _mapError(error)
                 await reduce(effect)
             }
+        case .timer(let interval, let id, let mapEffect):
+            await cancelStore.cancel(id)
+            timerQueue.sync {
+                let timer = Timer.scheduledTimer(
+                    withTimeInterval: interval,
+                    repeats: true,
+                    block: { [weak self] _ in
+                        guard let self = self else { return }
+                        let effect = mapEffect(Date())
+                        Task { await self.reduce(effect) }
+                    }
+                )
+                
+                RunLoop.current.add(timer, forMode: .default)
+                RunLoop.current.run()
+                Task { await cancelStore.store(id, cancel: timer.invalidate) }
+            }
         case .cancel(let id):
-            cancelStore.cancel(id)
+            await cancelStore.cancel(id)
         case .merge(let effects):
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
@@ -156,14 +174,15 @@ public extension AsyncStore {
         to keyPath: KeyPath<State, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
-        let stream = downstream(for: id)
-        let effectStream = stream
+        let effectStream = downstream(for: id)
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
             .map(mapEffect)
         
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        Task {
+            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+            await cancelStore.store(id, cancel: bindTask.cancel)
+        }
     }
     
     func bind<Value, Stream: AsyncSequence>(
@@ -175,8 +194,10 @@ public extension AsyncStore {
             .removeDuplicates()
             .map(mapEffect)
         
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        Task {
+            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+            await cancelStore.store(id, cancel: bindTask.cancel)
+        }
     }
     
     func bind<UState, UEnv, Value>(
@@ -185,13 +206,14 @@ public extension AsyncStore {
         on keyPath: KeyPath<UState, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
-        let upstream = upstreamStore.downstream(for: id)
-        let effectStream = upstream
+        let effectStream = upstreamStore.downstream(for: id)
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
             .map(mapEffect)
         
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        Task {
+            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+            await cancelStore.store(id, cancel: bindTask.cancel)
+        }
     }
 }

@@ -13,9 +13,8 @@ import SwiftUI
 
 final class StoreWaiter<State, Env> {
     let count: Int
-    private var currentCount = 0
     private var cancellable: AnyCancellable! = .none
-    private var counterTask: Task<Void, Never>! = .none
+    private var counterTask: Task<Int, Never>! = .none
     private var waitTask: Task<Void, Never>? = .none
     
     init(store: AsyncStore<State, Env>, count: Int) {
@@ -29,12 +28,15 @@ final class StoreWaiter<State, Env> {
         }
         
         counterTask = Task {
+            var streamCount = 0
             for await _ in stream {
-                currentCount += 1
-                if currentCount >= count {
+                guard !Task.isCancelled else { break }
+                streamCount += 1
+                if streamCount >= count {
                     waitTask?.cancel()
                 }
             }
+            return streamCount
         }
     }
     
@@ -45,14 +47,14 @@ final class StoreWaiter<State, Env> {
     }
     
     func wait(timeout: TimeInterval) async {
-        guard currentCount < count else { return }
         waitTask = Task {
             try? await Task.trySleep(for: timeout)
+            counterTask?.cancel()
         }
-        
-        await waitTask?.value
-        if currentCount < count {
-            XCTFail("Store timed out after \(timeout) seconds. Count:\(currentCount)")
+    
+        let actualCount = await counterTask.value
+        if actualCount != count {
+            XCTFail("Store timed out after \(timeout) seconds. Count:\(actualCount)")
         }
     }
 }

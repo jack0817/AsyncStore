@@ -7,37 +7,25 @@
 
 import Foundation
 
-public struct AsyncCancelStore {
-    actor CancelActor {
-        var cancellables: [AnyHashable: () -> Void] = [:]
-        
-        func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
-            guard let id = id else { return }
-            cancellables[id] = cancel
-        }
-        
-        func cancel(_ id: AnyHashable?) {
-            guard let id = id else { return }
-            cancellables[id]?()
-        }
-        
-        func cancellAll() {
-            cancellables.forEach { $1() }
-            cancellables = [:]
-        }
+public actor AsyncCancelStore {
+    private var cancellables: [AnyHashable: () -> Void] = [:]
+    
+    deinit {
+        cancellAll()
     }
     
-    private let cancelActor = CancelActor()
-    
-    public func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
-        Task { await cancelActor.store(id, cancel: cancel) }
+    func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
+        guard let id = id else { return }
+        cancellables[id] = cancel
     }
     
-    public func cancel(_ id: AnyHashable?) {
-        Task { await cancelActor.cancel(id) }
+    func cancel(_ id: AnyHashable?) {
+        guard let id = id else { return }
+        cancellables[id]?()
     }
     
-    public func cancellAll() {
-        Task { await cancelActor.cancellAll() }
+    func cancellAll() {
+        cancellables.forEach { $1() }
+        cancellables = [:]
     }
 }

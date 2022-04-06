@@ -5,6 +5,7 @@ final class AsyncStoreTests: XCTestCase {
     struct TestState: Equatable {
         var value = ""
         var ints: [Int] = []
+        var dates: [Date] = []
     }
     
     struct TestEnvironment: Equatable {
@@ -80,10 +81,37 @@ final class AsyncStoreTests: XCTestCase {
         
         store.receive(.task(operation))
         
-        await waiter.wait(timeout: 5.0
-        )
+        await waiter.wait(timeout: 5.0)
         XCTAssertEqual(count, expectedCount)
         XCTAssertEqual(store.value, expectedValue)
+    }
+    
+    func testTimerEffect() async throws {
+        let expectedDatesCount = 2
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in .none }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 2)
+        
+        store.receive(
+            .timer(
+                0.25,
+                id: "Timer",
+                mapEffect: { tick in
+                    return .set { $0.dates.append(tick) }
+                }
+            )
+        )
+        
+        await waiter.wait(timeout: 5.0)
+        store.receive(.cancel("Timer"))
+        
+        let actualDatesCount = store.dates.count
+        XCTAssertEqual(actualDatesCount, expectedDatesCount)
     }
     
     func testMergeEffect() async throws {
@@ -147,32 +175,36 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(store.ints, expectedInts)
     }
     
-    // MARK: TODO: Fix this test!
-//    func testCancelEffect() async  {
-//        let expectedInts = [2]
-//        let dataOperation: (Int) async throws -> TestStore.Effect = { value in
-//            try await Task.trySleep(for: 1.0)
-//            return .set { $0.ints.append(value) }
-//        }
-//
-//        let store = TestStore(
-//            state: .init(),
-//            env: .init(),
-//            mapError: { _ in
-//                return .none
-//            }
-//        )
-//
-//        let waiter = StoreWaiter(store: store, count: 1)
-//
-//        let taskId = "CancelledTask"
-//
-//        store.receive(.dataTask(1, dataOperation, taskId))
-//        store.receive(.dataTask(2, dataOperation, taskId))
-//
-//        await waiter.wait(timeout: 5.0)
-//        XCTAssertEqual(store.ints, expectedInts)
-//    }
+    func testCancelEffect() async  {
+        let expectedInts = [2]
+        let taskId = "CancelledTask"
+        var cancelError: Error? = .none
+        
+        let dataOperation: (Int) async throws -> TestStore.Effect = { value in
+            try await Task.trySleep(for: 0.5)
+            return .set { $0.ints.append(value) }
+        }
+
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { error in
+                cancelError = error
+                return .none
+            }
+        )
+
+        let waiter = StoreWaiter(store: store, count: 1)
+
+        store.receive(.dataTask(1, dataOperation, taskId))
+        try? await Task.trySleep(for: 0.1)
+        store.receive(.dataTask(2, dataOperation, taskId))
+
+        await waiter.wait(timeout: 5.0)
+        
+        XCTAssertEqual(store.ints, expectedInts)
+        XCTAssertTrue(cancelError is CancellationError)
+    }
     
     func testBindToKeyPath() async {
         let store = TestStore(
@@ -183,18 +215,66 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
+        let waiter = StoreWaiter(store: store, count: 3)
+        
         store.bind(
             id: "asyncBind",
             to: \.ints,
             mapEffect: { ints in
-                .set{ $0.value = ints.map(String.init).joined() }
+                print("\(type(of: store)) set")
+                return .set{ $0.value = ints.map(String.init).joined() }
+            }
+        )
+        
+        store.receive(.set({ $0.ints = [1, 2] }))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, "12")
+    }
+    
+    func testBindToStream() async {
+        let expectedDate1 = Date()
+        let expectedDate2 = Calendar.current.date(byAdding: .day, value: 1, to: expectedDate1)!
+        let expectedDate3 = Calendar.current.date(byAdding: .day, value: 1, to: expectedDate2)!
+        
+        var continuation: AsyncStream<Date>.Continuation! = .none
+        let stream = AsyncStream<Date> { cont in
+            continuation = cont
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
             }
         )
         
         let waiter = StoreWaiter(store: store, count: 2)
-        store.receive(.set({ $0.ints = [1, 2] }))
+        
+        store.bind(
+            id: "Stream",
+            to: stream,
+            mapEffect: { date in
+                .set { state in
+                    state.dates.append(date)
+                }
+            }
+        )
+        
+        continuation.yield(expectedDate1)
+        continuation.yield(expectedDate2)
         await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.value, "12")
+        
+        store.receive(.cancel("Stream"))
+        try? await Task.trySleep(for: 0.5)
+        
+        continuation.yield(expectedDate3)
+        continuation.finish()
+        
+        XCTAssertEqual(store.dates.count, 2)
+        XCTAssertEqual(store.dates.first, expectedDate1)
+        XCTAssertEqual(store.dates.last, expectedDate2)
+        XCTAssertTrue(!store.dates.contains(expectedDate3))
     }
     
     func testBindToParentStore() async {
