@@ -26,10 +26,6 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
-    deinit {
-        stateDistributor.finishAll()
-    }
-    
     public var state: State {
         get { _state }
     }

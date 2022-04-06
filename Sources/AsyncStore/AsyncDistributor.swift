@@ -12,6 +12,10 @@ public struct AsyncDistributor<Element> {
     fileprivate actor ContinuationActor {
         private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
         
+        deinit {
+            finishAll()
+        }
+        
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
             continuations[id] = stream
         }
