@@ -17,13 +17,11 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
-    private let timerQueue: DispatchQueue
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
-        self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
     public var state: State {
@@ -83,7 +81,7 @@ extension AsyncStore {
             }
         case .timer(let interval, let id, let mapEffect):
             await cancelStore.cancel(id)
-            timerQueue.sync {
+            let task = Task<() -> Void, Never> {
                 let timer = Timer.scheduledTimer(
                     withTimeInterval: interval,
                     repeats: true,
@@ -96,8 +94,11 @@ extension AsyncStore {
                 
                 RunLoop.current.add(timer, forMode: .default)
                 RunLoop.current.run()
-                Task { await cancelStore.store(id, cancel: timer.invalidate) }
+                return timer.invalidate
             }
+            let cancel = await task.value
+            await cancelStore.store(id, cancel: cancel)
+            
         case .cancel(let id):
             await cancelStore.cancel(id)
         case .merge(let effects):
