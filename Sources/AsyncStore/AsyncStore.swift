@@ -17,11 +17,13 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
+    private let timerQueue: DispatchQueue
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
+        self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
     public var state: State {
@@ -81,24 +83,23 @@ extension AsyncStore {
             }
         case .timer(let interval, let id, let mapEffect):
             await cancelStore.cancel(id)
-            let task = Task<() -> Void, Never> {
-                let timer = Timer.scheduledTimer(
-                    withTimeInterval: interval,
-                    repeats: true,
-                    block: { [weak self] _ in
+            let timer = Timer.scheduledTimer(
+                withTimeInterval: interval,
+                repeats: true,
+                block: { _ in
+                    let effect = mapEffect(Date())
+                    Task { [weak self] in
                         guard let self = self else { return }
-                        let effect = mapEffect(Date())
-                        Task { await self.reduce(effect) }
+                        await self.reduce(effect)
                     }
-                )
-                
+                }
+            )
+            
+            await cancelStore.store(id, cancel: timer.invalidate)
+            timerQueue.sync {
                 RunLoop.current.add(timer, forMode: .default)
                 RunLoop.current.run()
-                return timer.invalidate
             }
-            let cancel = await task.value
-            await cancelStore.store(id, cancel: cancel)
-            
         case .cancel(let id):
             await cancelStore.cancel(id)
         case .merge(let effects):

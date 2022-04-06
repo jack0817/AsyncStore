@@ -99,7 +99,7 @@ final class AsyncStoreTests: XCTestCase {
         
         store.receive(
             .timer(
-                0.25,
+                0.1,
                 id: "Timer",
                 mapEffect: { tick in
                     return .set { $0.dates.append(tick) }
@@ -109,6 +109,7 @@ final class AsyncStoreTests: XCTestCase {
         
         await waiter.wait(timeout: 5.0)
         store.receive(.cancel("Timer"))
+        try? await Task.trySleep(for: 0.25)
         
         let actualDatesCount = store.dates.count
         XCTAssertEqual(actualDatesCount, expectedDatesCount)
