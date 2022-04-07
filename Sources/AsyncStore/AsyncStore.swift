@@ -67,7 +67,6 @@ extension AsyncStore {
         case .set(let setter):
             await setOnMain(setter)
         case .task(let operation, let id):
-            await cancelStore.cancel(id)
             let task = Task {
                 let effect = await execute(operation)
                 await reduce(effect)
@@ -82,7 +81,6 @@ extension AsyncStore {
                 await reduce(effect)
             }
         case .timer(let interval, let id, let mapEffect):
-            await cancelStore.cancel(id)
             let timer = AsyncTimer(interval: interval)
             let timerTask = Task {
                 for try await date in timer {

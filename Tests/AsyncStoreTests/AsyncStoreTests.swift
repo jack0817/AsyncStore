@@ -209,6 +209,7 @@ final class AsyncStoreTests: XCTestCase {
         await waiter.wait(timeout: 5.0)
         
         XCTAssertEqual(store.ints, expectedInts)
+        XCTAssertNotNil(cancelError)
         XCTAssertTrue(cancelError is CancellationError)
     }
     
