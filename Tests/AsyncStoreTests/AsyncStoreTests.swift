@@ -88,6 +88,7 @@ final class AsyncStoreTests: XCTestCase {
     
     func testTimerEffect() async throws {
         let expectedDatesCount = 2
+        let expectedValue = "TimerStarted"
         
         let store = TestStore(
             state: .init(),
@@ -95,15 +96,18 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let waiter = StoreWaiter(store: store, count: 3)
         
         store.receive(
-            .timer(
-                0.1,
-                id: "Timer",
-                mapEffect: { tick in
-                    return .set { $0.dates.append(tick) }
-                }
+            .concatenate(
+                .timer(
+                    0.1,
+                    id: "Timer",
+                    mapEffect: { tick in
+                        return .set { $0.dates.append(tick) }
+                    }
+                ),
+                .set(\.value, to: expectedValue)
             )
         )
         
@@ -113,6 +117,7 @@ final class AsyncStoreTests: XCTestCase {
         
         let actualDatesCount = store.dates.count
         XCTAssertEqual(actualDatesCount, expectedDatesCount)
+        XCTAssertEqual(store.value, expectedValue)
     }
     
     func testMergeEffect() async throws {
@@ -222,7 +227,6 @@ final class AsyncStoreTests: XCTestCase {
             id: "asyncBind",
             to: \.ints,
             mapEffect: { ints in
-                print("\(type(of: store)) set")
                 return .set{ $0.value = ints.map(String.init).joined() }
             }
         )
