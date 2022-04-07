@@ -83,23 +83,14 @@ extension AsyncStore {
             }
         case .timer(let interval, let id, let mapEffect):
             await cancelStore.cancel(id)
-            let timer = Timer.scheduledTimer(
-                withTimeInterval: interval,
-                repeats: true,
-                block: { _ in
-                    let effect = mapEffect(Date())
-                    Task { [weak self] in
-                        guard let self = self else { return }
-                        await self.reduce(effect)
-                    }
+            let timer = AsyncTimer(interval: interval)
+            let timerTask = Task {
+                for try await date in timer {
+                    let effect = mapEffect(date)
+                    await reduce(effect)
                 }
-            )
-            
-            await cancelStore.store(id, cancel: timer.invalidate)
-            timerQueue.async {
-                RunLoop.current.add(timer, forMode: .default)
-                RunLoop.current.run()
             }
+            await cancelStore.store(id, cancel: timerTask.cancel)
         case .cancel(let id):
             await cancelStore.cancel(id)
         case .merge(let effects):

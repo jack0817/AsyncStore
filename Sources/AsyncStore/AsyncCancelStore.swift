@@ -16,13 +16,11 @@ public actor AsyncCancelStore {
     
     func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
         guard let id = id else { return }
-        print("[AsyncCancelStore] stored \"\(id)\"")
         cancellables[id] = cancel
     }
     
     func cancel(_ id: AnyHashable?) {
         guard let id = id else { return }
-        print("[AsyncCancelStore] cancelling \"\(id)\"")
         cancellables[id]?()
     }
     
