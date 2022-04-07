@@ -17,13 +17,11 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
-    private let timerQueue: DispatchQueue
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
-        self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
     public var state: State {
