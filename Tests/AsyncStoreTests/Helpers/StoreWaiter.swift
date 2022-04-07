@@ -15,7 +15,7 @@ final class StoreWaiter<State, Env> {
     let count: Int
     private var cancellable: AnyCancellable! = .none
     private var counterTask: Task<Int, Never>! = .none
-    private var waitTask: Task<Void, Never>? = .none
+    private var waitTask: Task<Bool, Never>! = .none
     
     init(store: AsyncStore<State, Env>, count: Int) {
         self.count = count
@@ -48,13 +48,26 @@ final class StoreWaiter<State, Env> {
     
     func wait(timeout: TimeInterval) async {
         waitTask = Task {
-            try? await Task.trySleep(for: timeout)
-            counterTask?.cancel()
+            defer { counterTask?.cancel() }
+            
+            do {
+                try await Task.trySleep(for: timeout)
+                return true
+            } catch {
+                return false
+            }
         }
     
         let actualCount = await counterTask.value
-        if actualCount != count {
-            XCTFail("Store timed out after \(timeout) seconds. Count:\(actualCount)")
+        let didTimeOut = await waitTask.value
+        
+        switch didTimeOut {
+        case true:
+            XCTFail("Store timed out after \(timeout) seconds. Actual:\(actualCount) Expected:\(count)")
+        case _ where actualCount != count:
+            XCTFail("Incorrect count. Actual:\(actualCount) Expected:\(count)")
+        default:
+            return
         }
     }
 }

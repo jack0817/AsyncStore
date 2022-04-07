@@ -17,13 +17,11 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let _mapError: (Error) -> Effect
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
-    private let timerQueue: DispatchQueue
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
-        self.timerQueue = DispatchQueue(label: "\(type(of: self)).TimerQueue")
     }
     
     public var state: State {
@@ -67,7 +65,6 @@ extension AsyncStore {
         case .set(let setter):
             await setOnMain(setter)
         case .task(let operation, let id):
-            await cancelStore.cancel(id)
             let task = Task {
                 let effect = await execute(operation)
                 await reduce(effect)
@@ -82,7 +79,6 @@ extension AsyncStore {
                 await reduce(effect)
             }
         case .timer(let interval, let id, let mapEffect):
-            await cancelStore.cancel(id)
             let timer = AsyncTimer(interval: interval)
             let timerTask = Task {
                 for try await date in timer {

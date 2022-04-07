@@ -87,7 +87,6 @@ extension AsyncSequence where Element: Equatable {
     }
 }
 
-
 // MARK: Extensions
 
 public extension Task where Success == Never, Failure == Never {
