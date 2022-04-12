@@ -23,8 +23,8 @@ public struct AsyncStoreLog {
     static func log(_ message: String) {
         guard isEnabled else { return }
         let logMessage = [
-            "[AsyncStore]",
             dateFormatter.string(from: Date()),
+            "[🔄AsyncStore]",
             message
         ].joined(separator: " - ")
         print(logMessage)
