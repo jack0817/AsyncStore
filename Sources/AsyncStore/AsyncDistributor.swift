@@ -26,6 +26,8 @@ public struct AsyncDistributor<Element> {
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
+                case .dropped(let element):
+                    AsyncStoreLog.log("[\(type(of: self))] dropped element \(element)")
                 default:
                     break
                 }
