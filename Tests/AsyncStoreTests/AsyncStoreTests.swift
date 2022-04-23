@@ -15,7 +15,9 @@ final class AsyncStoreTests: XCTestCase {
     typealias TestStore = AsyncStore<TestState, TestEnvironment>
     
     override func setUp() async throws {
-        AsyncStoreLog.setEnabld(true)
+        AsyncStoreLog.setOutput { logMessage in
+            print(logMessage)
+        }
     }
     
     func testInit() async {

@@ -8,7 +8,7 @@
 import Foundation
 
 public struct AsyncStoreLog {
-    private static var isEnabled = false
+    private static var output: ((String) -> Void)? = .none
     
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -16,17 +16,20 @@ public struct AsyncStoreLog {
         return formatter
     }()
     
-    public static func setEnabld(_ enabled: Bool) {
-        isEnabled = enabled
+    @available(*, deprecated, message: "Use 'setOutput' instead")
+    public static func setEnabled(_ enabled: Bool) { }
+    
+    public static func setOutput(_ output: @escaping (String) -> Void) {
+        Self.output = output
     }
     
     static func log(_ message: String) {
-        guard isEnabled else { return }
+        guard let output = Self.output else { return }
         let logMessage = [
             dateFormatter.string(from: Date()),
             "[🔄AsyncStore]",
             message
         ].joined(separator: " - ")
-        print(logMessage)
+        output(logMessage)
     }
 }
