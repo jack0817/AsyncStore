@@ -17,6 +17,7 @@ public struct AsyncDistributor<Element> {
         }
         
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
+            finish(id)
             continuations[id] = stream
         }
         
