@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "AsyncStore",
     platforms: [
-        .macOS(.v10_15),
+        .macOS(.v12),
         .iOS(.v15),
         .tvOS(.v15)
     ],
