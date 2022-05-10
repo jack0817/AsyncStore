@@ -36,7 +36,10 @@ extension AsyncStore.AsyncTimer {
         mutating func next() async -> Element? {
             do {
                 let start = nowNano
-                let sleep = UInt64(interval * 1_000_000_000) - offsetTime
+                var sleep = UInt64(abs(interval) * 1_000_000_000)
+                if offsetTime < sleep {
+                    sleep -= offsetTime
+                }
                 try await Task.sleep(nanoseconds: sleep)
                 let elapsed = nowNano - start
                 offsetTime = elapsed > sleep ? elapsed - sleep : 0
