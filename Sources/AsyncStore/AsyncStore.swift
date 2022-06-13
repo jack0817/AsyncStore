@@ -53,6 +53,17 @@ public final class AsyncStore<State, Environment>: ObservableObject {
             }
         )
     }
+    
+    public func stream(
+        for id: AnyHashable,
+        bufferingPolicy: AsyncDistributor<State>.BufferingPolicy = .unbounded
+    ) -> AsyncStream<State> {
+        stateDistributor.stream(
+            for: id,
+            initialValue: state,
+            bufferingPolicy: bufferingPolicy
+        )
+    }
 }
 
 // MARK: Reducer
