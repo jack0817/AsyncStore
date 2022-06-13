@@ -54,15 +54,19 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         )
     }
     
-    public func stream(
+    public func stream<Value: Equatable>(
         for id: AnyHashable,
+        at keyPath: KeyPath<State, Value>,
         bufferingPolicy: AsyncDistributor<State>.BufferingPolicy = .unbounded
-    ) -> AsyncStream<State> {
+    ) -> AnyAsyncSequence<Value> {
         stateDistributor.stream(
             for: id,
             initialValue: state,
             bufferingPolicy: bufferingPolicy
         )
+        .map{ $0[keyPath: keyPath] }
+        .removeDuplicates()
+        .eraseToAnyAsyncSequence()
     }
 }
 
