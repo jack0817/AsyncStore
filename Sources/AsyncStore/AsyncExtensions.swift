@@ -9,9 +9,9 @@ import Foundation
 
 // MARK: AnyAsyncSequence
 
-struct AnyAsyncSequence<Element>: AsyncSequence {
-    typealias AsyncIterator = AnyAsyncSequence<Element>.AnyAsyncSequenceIterator
-    typealias Element = Element
+public struct AnyAsyncSequence<Element>: AsyncSequence {
+    public typealias AsyncIterator = AnyAsyncSequence<Element>.AnyAsyncSequenceIterator
+    public typealias Element = Element
     
     private let _makeAsyncIterator: () -> AnyAsyncSequenceIterator
     
@@ -19,12 +19,12 @@ struct AnyAsyncSequence<Element>: AsyncSequence {
         self._makeAsyncIterator = { AnyAsyncSequenceIterator(base.makeAsyncIterator()) }
     }
     
-    func makeAsyncIterator() -> AnyAsyncSequenceIterator {
+    public func makeAsyncIterator() -> AnyAsyncSequenceIterator {
         self._makeAsyncIterator()
     }
 }
 
-extension AnyAsyncSequence {
+public extension AnyAsyncSequence {
     struct AnyAsyncSequenceIterator: AsyncIteratorProtocol {
         private let _next: () async throws -> Element?
         
@@ -33,13 +33,13 @@ extension AnyAsyncSequence {
             self._next = { try await iterator.next() }
         }
         
-        mutating func next() async throws -> Element? {
+        public mutating func next() async throws -> Element? {
             try await _next()
         }
     }
 }
 
-extension AsyncSequence {
+public extension AsyncSequence {
     func eraseToAnyAsyncSequence() -> AnyAsyncSequence<Self.Element> {
         AnyAsyncSequence(self)
     }
@@ -47,7 +47,7 @@ extension AsyncSequence {
 
 // MARK: AsyncRemoveDuplicatesSequence
 
-struct AsyncRemoveDuplicatesSequence<Upstream: AsyncSequence>: AsyncSequence, AsyncIteratorProtocol
+public struct AsyncRemoveDuplicatesSequence<Upstream: AsyncSequence>: AsyncSequence, AsyncIteratorProtocol
 where Upstream.Element: Equatable
 {
     actor Filter {
@@ -60,8 +60,8 @@ where Upstream.Element: Equatable
         }
     }
     
-    typealias AsyncIterator = AsyncFilterSequence<Upstream>.Iterator
-    typealias Element = Upstream.Element
+    public typealias AsyncIterator = AsyncFilterSequence<Upstream>.Iterator
+    public typealias Element = Upstream.Element
     
     var iterator: AsyncIterator
     
@@ -72,16 +72,16 @@ where Upstream.Element: Equatable
             .makeAsyncIterator()
     }
     
-    func makeAsyncIterator() -> AsyncIterator {
+    public func makeAsyncIterator() -> AsyncIterator {
         iterator
     }
     
-    mutating func next() async throws -> Upstream.Element? {
+    public mutating func next() async throws -> Upstream.Element? {
         try await iterator.next()
     }
 }
 
-extension AsyncSequence where Element: Equatable {
+public extension AsyncSequence where Element: Equatable {
     func removeDuplicates() -> AsyncRemoveDuplicatesSequence<Self> {
         .init(self)
     }
