@@ -329,3 +329,89 @@ final class AsyncStoreTests: XCTestCase {
     }
 }
 
+// MARK: Sequence Effect Tests
+
+extension AsyncStoreTests {
+    func testAppend() async {
+        let expectedValue = [1]
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        store.receive(.append(expectedValue[0], to: \.ints))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testInsert() async {
+        let expectedValue = [1]
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        store.receive(.insert(expectedValue[0], at: 0, to: \.ints))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemove() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [1, 2], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        store.receive(.remove(at: 1, from: \.ints))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemoveFirst() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [2, 1], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        store.receive(.removeFirst(from: \.ints))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemoveLast() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [1, 2], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        store.receive(.removeLast(from: \.ints))
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+}

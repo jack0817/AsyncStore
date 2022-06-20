@@ -48,3 +48,27 @@ public extension AsyncStore.Effect {
         .concatenate(effects: effects)
     }
 }
+
+// MARK: Sequences
+
+public extension AsyncStore.Effect {
+    static func append<Element>(_ element: Element, to sequence: WritableKeyPath<State, [Element]>) -> Self {
+        .set { state in state[keyPath: sequence].append(element) }
+    }
+    
+    static func insert<Element>(_ element: Element, at index: Int, to sequence: WritableKeyPath<State, [Element]>) -> Self {
+        .set { state in state[keyPath: sequence].insert(element, at: index) }
+    }
+    
+    static func remove<Element>(at index: Int, from sequence: WritableKeyPath<State, [Element]>) -> Self {
+        .set { state in state[keyPath: sequence].remove(at: index) }
+    }
+    
+    static func removeFirst<Element>(from sequence: WritableKeyPath<State, [Element]>) -> Self {
+        .set { state in state[keyPath: sequence].removeFirst() }
+    }
+    
+    static func removeLast<Element>(from sequence: WritableKeyPath<State, [Element]>) -> Self {
+        .set { state in state[keyPath: sequence].removeLast() }
+    }
+}
