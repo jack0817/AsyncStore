@@ -12,6 +12,7 @@ public extension AsyncStore {
         case none
         case set((inout State) -> Void)
         case task(operation: () async throws -> Effect, id: AnyHashable?)
+        case debounce(operation: () async throws -> Effect, id: AnyHashable, delay: TimeInterval)
         case sleep(TimeInterval)
         case timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
         case cancel(AnyHashable)

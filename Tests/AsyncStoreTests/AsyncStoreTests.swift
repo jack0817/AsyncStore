@@ -99,6 +99,42 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(store.value, expectedValue)
     }
     
+    func testDebounceEffect() async throws {
+        var cancelCount = 0
+        let thrashCount = 10
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { error in
+                switch error {
+                case is CancellationError:
+                    cancelCount += 1
+                    return .none
+                default:
+                    return .none
+                }
+            }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        
+        for i in 0 ..< thrashCount {
+            store.receive(
+                .debounce(
+                    operation: { .append(i, to: \.ints) },
+                    id: "Thrash",
+                    delay: 0.5
+                )
+            )
+        }
+        
+        await waiter.wait(timeout: 5.0)
+        
+        XCTAssertEqual(cancelCount, thrashCount - 1)
+        XCTAssertEqual(store.ints.count, 1)
+    }
+    
     func testTimerEffect() async throws {
         let expectedDatesCount = 2
         let expectedValue = "TimerStarted"

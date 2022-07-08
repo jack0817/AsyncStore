@@ -86,6 +86,15 @@ extension AsyncStore {
             }
             await cancelStore.store(id, cancel: task.cancel)
             await task.value
+        case .debounce(let operation, let id, let delay):
+            let task = Task {
+                try await Task.trySleep(for: delay)
+                let effect = await execute(operation)
+                await reduce(effect)
+            }
+            await cancelStore.store(id, cancel: task.cancel)
+            do { try await task.value }
+            catch { await reduce(_mapError(error)) }
         case .sleep(let time):
             do {
                 try await Task.trySleep(for: time)
