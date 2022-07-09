@@ -12,7 +12,6 @@ public extension AsyncStore {
         case none
         case set((inout State) -> Void)
         case task(operation: () async throws -> Effect, id: AnyHashable?)
-        case debounce(operation: () async throws -> Effect, id: AnyHashable, delay: TimeInterval)
         case sleep(TimeInterval)
         case timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
         case cancel(AnyHashable)
@@ -31,6 +30,20 @@ public extension AsyncStore.Effect {
         _ id: AnyHashable? = .none
     ) -> Self {
         .task(operation: operation, id: id)
+    }
+    
+    static func debounce(
+        operation: @escaping () async throws -> Self,
+        id: AnyHashable,
+        delay: TimeInterval
+    ) -> Self {
+        .task(
+            operation: {
+                try await Task.trySleep(for: delay)
+                return try await operation()
+            },
+            id: id
+        )
     }
     
     static func dataTask<Data>(
