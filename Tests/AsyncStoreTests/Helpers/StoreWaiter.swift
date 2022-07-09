@@ -6,14 +6,12 @@
 //
 
 import Foundation
-import Combine
 import XCTest
 @testable import AsyncStore
 import SwiftUI
 
 final class StoreWaiter<State: Equatable, Env> {
     let count: Int
-    private var cancellable: AnyCancellable! = .none
     private var counterTask: Task<Int, Never>! = .none
     private var waitTask: Task<Bool, Never>! = .none
     
@@ -46,7 +44,6 @@ final class StoreWaiter<State: Equatable, Env> {
     }
     
     deinit {
-        cancellable?.cancel()
         counterTask?.cancel()
         waitTask?.cancel()
     }
