@@ -6,42 +6,44 @@
 //
 
 import Foundation
-import Combine
 import XCTest
 @testable import AsyncStore
 import SwiftUI
 
-final class StoreWaiter<State, Env> {
+final class StoreWaiter<State: Equatable, Env> {
     let count: Int
-    private var cancellable: AnyCancellable! = .none
     private var counterTask: Task<Int, Never>! = .none
     private var waitTask: Task<Bool, Never>! = .none
     
     init(store: AsyncStore<State, Env>, count: Int) {
         self.count = count
         
-        let stream = AsyncStream<Void> { cont in
-            cancellable = store.objectWillChange
-                .sink { _ in
-                    cont.yield(())
-                }
-        }
+        let stream = store.stream(
+            for: "\(type(of: store)).StoreWaiter",
+            at: \.self,
+            bufferingPolicy: .unbounded
+        )
+        .dropFirst()
         
         counterTask = Task {
             var streamCount = 0
-            for await _ in stream {
-                guard !Task.isCancelled else { break }
-                streamCount += 1
-                if streamCount >= count {
-                    waitTask?.cancel()
+            do {
+                for try await _ in stream {
+                    guard !Task.isCancelled else { break }
+                    streamCount += 1
+                    if streamCount >= count {
+                        waitTask?.cancel()
+                    }
                 }
+            } catch {
+                print("\(error)")
             }
+            
             return streamCount
         }
     }
     
     deinit {
-        cancellable?.cancel()
         counterTask?.cancel()
         waitTask?.cancel()
     }
@@ -49,7 +51,6 @@ final class StoreWaiter<State, Env> {
     func wait(timeout: TimeInterval) async {
         waitTask = Task {
             defer { counterTask?.cancel() }
-            
             do {
                 try await Task.trySleep(for: timeout)
                 return true

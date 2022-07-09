@@ -32,6 +32,20 @@ public extension AsyncStore.Effect {
         .task(operation: operation, id: id)
     }
     
+    static func debounce(
+        operation: @escaping () async throws -> Self,
+        id: AnyHashable,
+        delay: TimeInterval
+    ) -> Self {
+        .task(
+            operation: {
+                try await Task.trySleep(for: delay)
+                return try await operation()
+            },
+            id: id
+        )
+    }
+    
     static func dataTask<Data>(
         _ data: Data,
         _ operation: @escaping (Data) async throws -> Self,
