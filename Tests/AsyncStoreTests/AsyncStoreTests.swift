@@ -271,7 +271,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 3)
+        let waiter = StoreWaiter(store: store, count: 2)
         
         store.bind(
             id: "asyncBind",
@@ -358,7 +358,7 @@ final class AsyncStoreTests: XCTestCase {
             mapEffect: { parentValue in .set { $0.value = parentValue } }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let waiter = StoreWaiter(store: store, count: 1)
         parentStore.receive(.set({ $0.value = exptectedValue }))
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.value, exptectedValue)
