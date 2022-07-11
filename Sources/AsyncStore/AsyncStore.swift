@@ -60,8 +60,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     public func receive(_ effect: Effect) {
         let result = receiveContinuation?.yield(effect)
         switch result {
-        case .dropped:
-            AsyncStoreLog.log("[\(type(of: self))] dropped received effect")
+        case .dropped(let effect):
+            AsyncStoreLog.log("[\(type(of: self))] dropped received effect \(effect)")
         case .terminated:
             AsyncStoreLog.log("[\(type(of: self))] stream terminated")
         default:
