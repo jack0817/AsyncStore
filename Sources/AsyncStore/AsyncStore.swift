@@ -15,6 +15,9 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private var _state: State
     private let _env: Environment
     private let _mapError: (Error) -> Effect
+    
+    private var receiveContinuation: AsyncStream<Effect>.Continuation? = .none
+    private var receiveTask: Task<Void, Never>? = .none
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
     
@@ -22,6 +25,24 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self._state = state
         self._env = env
         self._mapError = mapError
+        
+        let stream = AsyncStream<Effect>(
+            Effect.self,
+            bufferingPolicy: .unbounded
+        ) { continuation in
+            self.receiveContinuation = continuation
+        }
+        
+        self.receiveTask = Task {
+            for await effect in stream {
+                await reduce(effect)
+            }
+        }
+    }
+    
+    deinit {
+        receiveContinuation?.finish()
+        receiveTask?.cancel()
     }
     
     public var state: State {
@@ -37,7 +58,15 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     }
     
     public func receive(_ effect: Effect) {
-        Task { await reduce(effect) }
+        let result = receiveContinuation?.yield(effect)
+        switch result {
+        case .dropped(let effect):
+            AsyncStoreLog.log("[\(type(of: self))] dropped received effect \(effect)")
+        case .terminated:
+            AsyncStoreLog.log("[\(type(of: self))] stream terminated")
+        default:
+            break
+        }
     }
     
     public func binding<Value>(for keyPath: WritableKeyPath<State, Value>) -> Binding<Value> {
@@ -73,7 +102,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
 // MARK: Reducer
 
 extension AsyncStore {
-    private func reduce(_ effect: Effect) async {
+    private func reduce(_ effect: Effect, awaitTask: Bool = false) async {
         switch effect {
         case .none:
             break
@@ -85,6 +114,7 @@ extension AsyncStore {
                 await reduce(effect)
             }
             await cancelStore.store(id, cancel: task.cancel)
+            guard awaitTask else { return }
             await task.value
         case .sleep(let time):
             do {
@@ -121,7 +151,7 @@ extension AsyncStore {
             }
         case .concatenate(let effects):
             for effect in effects {
-                await reduce(effect)
+                await reduce(effect, awaitTask: true)
             }
         }
     }

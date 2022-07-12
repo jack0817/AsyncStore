@@ -133,6 +133,7 @@ final class AsyncStoreTests: XCTestCase {
         
         XCTAssertEqual(cancelCount, thrashCount - 1)
         XCTAssertEqual(store.ints.count, 1)
+        XCTAssertEqual(store.ints[0], thrashCount - 1)
     }
     
     func testTimerEffect() async throws {
