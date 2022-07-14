@@ -32,8 +32,16 @@ public extension AsyncStore.Effect {
         .task(operation: operation, id: id)
     }
     
+    static func dataTask<Data>(
+        _ data: Data,
+        _ operation: @escaping (Data) async throws -> Self,
+        _ id: AnyHashable? = .none
+    ) -> Self {
+        .task(operation: { try await operation(data) }, id: id)
+    }
+    
     static func debounce(
-        operation: @escaping () async throws -> Self,
+        task operation: @escaping () async throws -> Self,
         id: AnyHashable,
         delay: TimeInterval
     ) -> Self {
@@ -46,12 +54,19 @@ public extension AsyncStore.Effect {
         )
     }
     
-    static func dataTask<Data>(
-        _ data: Data,
-        _ operation: @escaping (Data) async throws -> Self,
-        _ id: AnyHashable? = .none
+    static func debounce<Data>(
+        data: Data,
+        task operation: @escaping (Data) async throws -> Self,
+        id: AnyHashable,
+        delay: TimeInterval
     ) -> Self {
-        .task(operation: { try await operation(data) }, id: id)
+        .task(
+            operation: {
+                try await Task.trySleep(for: delay)
+                return try await operation(data)
+            },
+            id: id
+        )
     }
     
     static func merge(_ effects: Self ...) -> Self {
