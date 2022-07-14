@@ -60,12 +60,10 @@ public extension AsyncStore.Effect {
         id: AnyHashable,
         delay: TimeInterval
     ) -> Self {
-        .task(
-            operation: {
-                try await Task.trySleep(for: delay)
-                return try await operation(data)
-            },
-            id: id
+        .debounce(
+            task: { try await operation(data) },
+            id: id,
+            delay: delay
         )
     }
     
