@@ -20,6 +20,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private var receiveTask: Task<Void, Never>? = .none
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
+    private var debounceTask: Task<Void, Never>? = .none
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -132,6 +133,18 @@ extension AsyncStore {
                 }
             }
             await cancelStore.store(id, cancel: timerTask.cancel)
+        case .debounce(let operation, let id, let delay):
+            let parentTask: Task<Task<Void, Never>, Never> = Task {
+                Task {
+                    let effect = await execute {
+                        try await Task.trySleep(for: delay)
+                        return try await operation()
+                    }
+                    await reduce(effect)
+                }
+            }
+            let debounceTask = await parentTask.value
+            await cancelStore.store(id, cancel: debounceTask.cancel)
         case .cancel(let id):
             await cancelStore.cancel(id)
         case .merge(let effects):

@@ -14,6 +14,7 @@ public extension AsyncStore {
         case task(operation: () async throws -> Effect, id: AnyHashable?)
         case sleep(TimeInterval)
         case timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
+        case debounce(operation: () async throws -> Effect, id: AnyHashable, delay: TimeInterval)
         case cancel(AnyHashable)
         case merge(effects: [Effect])
         case concatenate(effects: [Effect])
@@ -40,28 +41,14 @@ public extension AsyncStore.Effect {
         .task(operation: { try await operation(data) }, id: id)
     }
     
-    static func debounce(
-        task operation: @escaping () async throws -> Self,
-        id: AnyHashable,
-        delay: TimeInterval
-    ) -> Self {
-        .task(
-            operation: {
-                try await Task.trySleep(for: delay)
-                return try await operation()
-            },
-            id: id
-        )
-    }
-    
-    static func debounce<Data>(
-        data: Data,
-        task operation: @escaping (Data) async throws -> Self,
-        id: AnyHashable,
-        delay: TimeInterval
+    static func debounceDataTask<Data>(
+        _ data: Data,
+        _ operation: @escaping (Data) async throws -> Self,
+        _ id: AnyHashable,
+        _ delay: TimeInterval
     ) -> Self {
         .debounce(
-            task: { try await operation(data) },
+            operation: { try await operation(data) },
             id: id,
             delay: delay
         )
