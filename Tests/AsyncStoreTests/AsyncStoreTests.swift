@@ -10,6 +10,7 @@ import XCTest
 
 final class AsyncStoreTests: XCTestCase {
     struct TestState: Equatable {
+        var concatToggle: Bool = false
         var value = ""
         var ints: [Int] = []
         var dates: [Date] = []
@@ -267,6 +268,79 @@ final class AsyncStoreTests: XCTestCase {
         
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedInts)
+    }
+    
+    func testConcatenateWithToggleEffect() async throws {
+        let expectedInts = [1, 2]
+        let operation1: () async throws -> TestStore.Effect = {
+            try? await Task.sleep(nanoseconds: 500_000)
+            return .set { $0.ints.append(1) }
+        }
+        
+        let operation2: () async throws -> TestStore.Effect = {
+            return .set { $0.ints.append(2) }
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in .none }
+        )
+        
+        let toggleWaiter = StoreWaiter(store: store, count: 1)
+        
+        store.receive(
+            .concatenate(
+                \.concatToggle,
+                 .task(operation1),
+                 .task(operation2)
+            )
+        )
+        
+        await toggleWaiter.wait(timeout: 5.0)
+        XCTAssertTrue(store.concatToggle)
+        
+        let waiter = StoreWaiter(store: store, count: 3)
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedInts)
+        XCTAssertFalse(store.concatToggle)
+    }
+    
+    func testConcatenateWithValue() async throws {
+        let expectedInts = [1, 2]
+        let operation1: () async throws -> TestStore.Effect = {
+            try? await Task.sleep(nanoseconds: 500_000)
+            return .set { $0.ints.append(1) }
+        }
+        
+        let operation2: () async throws -> TestStore.Effect = {
+            return .set { $0.ints.append(2) }
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in .none }
+        )
+        
+        let valueWaiter = StoreWaiter(store: store, count: 1)
+        
+        store.receive(
+            .concatenate(
+                \.value,
+                 ("loading", "finished"),
+                 .task(operation1),
+                 .task(operation2)
+            )
+        )
+        
+        await valueWaiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.value, "loading")
+        
+        let waiter = StoreWaiter(store: store, count: 3)
+        await waiter.wait(timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedInts)
+        XCTAssertEqual(store.value, "finished")
     }
     
     func testCancelEffect() async  {
