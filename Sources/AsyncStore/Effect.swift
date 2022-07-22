@@ -74,6 +74,22 @@ public extension AsyncStore.Effect {
     static func concatenate(_ effects: Self ...) -> Self {
         .concatenate(effects: effects)
     }
+    
+    static func concatenate(_ toggleKeyPath: WritableKeyPath<State, Bool>, _ effects: Self ...) -> Self {
+        var effects = effects
+        effects.insert(.set(toggleKeyPath, to: true), at: 0)
+        effects.append(.set(toggleKeyPath, to: false))
+        
+        return .concatenate(effects: effects)
+    }
+    
+    static func concatenate<Value>(_ statusKeyPath: WritableKeyPath<State, Value>, _ values: (Value, Value),  _ effects: Self ...) -> Self {
+        var effects = effects
+        effects.insert(.set(statusKeyPath, to: values.0), at: 0)
+        effects.append(.set(statusKeyPath, to: values.1))
+
+        return .concatenate(effects: effects)
+    }
 }
 
 // MARK: Sequences
