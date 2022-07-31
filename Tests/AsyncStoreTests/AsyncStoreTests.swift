@@ -122,7 +122,7 @@ final class AsyncStoreTests: XCTestCase {
         for i in 0 ..< thrashCount {
             store.receive(
                 .debounce(
-                    task: { .append(i, to: \.ints) },
+                    operation: { .append(i, to: \.ints) },
                     id: "Thrash",
                     delay: 0.5
                 )
@@ -134,6 +134,38 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(cancelCount, thrashCount - 1)
         XCTAssertEqual(store.ints.count, 1)
         XCTAssertEqual(store.ints[0], thrashCount - 1)
+    }
+    
+    func testDebounceWarning() async throws {
+        var actualMessages: [String] = []
+        
+        AsyncStoreLog.setLevel(.warning)
+        AsyncStoreLog.setOutput { log in
+            actualMessages.append(log)
+            print(log)
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in .none }
+        )
+        
+        let waiter = StoreWaiter(store: store, count: 1)
+        
+        store.receive(
+            .concatenate(
+                .debounce(
+                    operation: { .append(0, to: \.ints) },
+                    id: "Thrash",
+                    delay: 0.5
+                )
+            )
+        )
+        
+        await waiter.wait(timeout: 5.0)
+        
+        XCTAssertEqual(actualMessages.count, 1)
     }
     
     func testDebounceDataEffect() async throws {
@@ -159,8 +191,7 @@ final class AsyncStoreTests: XCTestCase {
         for i in 0 ..< thrashCount {
             store.receive(
                 .debounce(
-                    data: i,
-                    task: { i in .append(i, to: \.ints) },
+                    operation: { .append(i, to: \.ints) },
                     id: "Thrash",
                     delay: 0.5
                 )

@@ -27,9 +27,9 @@ public struct AsyncDistributor<Element> {
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
-                    AsyncStoreLog.log("[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
+                    AsyncStoreLog.warning( "[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
                 case .dropped(let element):
-                    AsyncStoreLog.log("[AsyncDistributor<\(type(of: element))>] dropped \"\(element)\"")
+                    AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] dropped \"\(element)\"")
                 default:
                     break
                 }
