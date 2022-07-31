@@ -20,7 +20,6 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private var receiveTask: Task<Void, Never>? = .none
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
-    private var debounceTask: Task<Void, Never>? = .none
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -62,9 +61,9 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         let result = receiveContinuation?.yield(effect)
         switch result {
         case .dropped(let effect):
-            AsyncStoreLog.log("[\(type(of: self))] dropped received effect \(effect)")
+            AsyncStoreLog.warning("[\(type(of: self))] dropped received effect \(effect)")
         case .terminated:
-            AsyncStoreLog.log("[\(type(of: self))] stream terminated")
+            AsyncStoreLog.warning("[\(type(of: self))] stream terminated")
         default:
             break
         }
@@ -104,6 +103,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
 
 extension AsyncStore {
     private func reduce(_ effect: Effect, awaitTask: Bool = false) async {
+        processWarnings(for: effect)
+        
         switch effect {
         case .none:
             break
@@ -145,6 +146,8 @@ extension AsyncStore {
             }
             let debounceTask = await parentTask.value
             await cancelStore.store(id, cancel: debounceTask.cancel)
+            guard awaitTask else { return }
+            await debounceTask.value
         case .cancel(let id):
             await cancelStore.cancel(id)
         case .merge(let effects):
@@ -207,6 +210,15 @@ extension AsyncStore {
             }
         }
     }
+    
+    private func processWarnings(for effect: Effect) {
+        switch effect {
+        case .concatenate(let effects) where effects.contains(where: { $0.isDebounce }):
+            AsyncStoreLog.warning("[\(type(of: self))] Concatenated debounce effects may not be debounced as they will be synchronized.")
+        default:
+            break
+        }
+    }
 }
 
 // MARK: Binding
@@ -257,6 +269,19 @@ public extension AsyncStore {
         Task {
             let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
             await cancelStore.store(id, cancel: bindTask.cancel)
+        }
+    }
+}
+
+// MARK: Effect Extensions
+
+private extension AsyncStore.Effect {
+    var isDebounce: Bool {
+        switch self {
+        case .debounce:
+            return true
+        default:
+            return false
         }
     }
 }

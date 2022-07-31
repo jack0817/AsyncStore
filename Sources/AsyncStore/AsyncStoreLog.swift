@@ -8,6 +8,7 @@
 import Foundation
 
 public struct AsyncStoreLog {
+    public private(set) static var level: AsyncStoreLog.Level = .debug
     private static var output: ((String) -> Void)? = .none
     
     private static let dateFormatter: DateFormatter = {
@@ -16,20 +17,60 @@ public struct AsyncStoreLog {
         return formatter
     }()
     
-    @available(*, deprecated, message: "Use 'setOutput' instead")
-    public static func setEnabled(_ enabled: Bool) { }
+    public static func setLevel(_ level: AsyncStoreLog.Level) {
+        Self.level = level
+    }
     
     public static func setOutput(_ output: @escaping (String) -> Void) {
         Self.output = output
     }
     
-    static func log(_ message: String) {
-        guard let output = Self.output else { return }
+    internal static func error(_ error: Error) {
+        Self.error("\(error)")
+    }
+    
+    internal static func error(_ msg: String) {
+        log(.error, msg)
+    }
+    
+    internal static func debug(_ msg: String) {
+        log(.debug, msg)
+    }
+    
+    internal static func warning(_ msg: String) {
+        log(.warning, msg)
+    }
+    
+    internal static func info(_ msg: String) {
+        log(.info, msg)
+    }
+    
+    fileprivate static func log(_ level: AsyncStoreLog.Level, _ message: String) {
+        guard let output = Self.output, level.rawValue <= Self.level.rawValue else { return }
         let logMessage = [
             dateFormatter.string(from: Date()),
             "[🔄AsyncStore]",
+            level.tag,
             message
         ].joined(separator: " - ")
         output(logMessage)
+    }
+}
+
+extension AsyncStoreLog {
+    public enum Level: Int {
+        case error = 0
+        case debug = 1
+        case warning = 2
+        case info = 3
+        
+        var tag: String {
+            switch self {
+            case .error: return "[ERROR]"
+            case .debug: return "[DEBUG]"
+            case .warning: return "[WARNING]"
+            case .info: return "[INFO]"
+            }
+        }
     }
 }

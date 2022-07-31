@@ -136,43 +136,36 @@ final class AsyncStoreTests: XCTestCase {
         XCTAssertEqual(store.ints[0], thrashCount - 1)
     }
     
-    func testConcatDebounceEffect() async throws {
-        var cancelCount = 0
-        let thrashCount = 10
+    func testDebounceWarning() async throws {
+        var actualMessages: [String] = []
+        
+        AsyncStoreLog.setLevel(.warning)
+        AsyncStoreLog.setOutput { log in
+            actualMessages.append(log)
+            print(log)
+        }
         
         let store = TestStore(
             state: .init(),
             env: .init(),
-            mapError: { error in
-                switch error {
-                case is CancellationError:
-                    cancelCount += 1
-                    return .none
-                default:
-                    return .none
-                }
-            }
+            mapError: { _ in .none }
         )
         
         let waiter = StoreWaiter(store: store, count: 1)
         
-        for i in 0 ..< thrashCount {
-            store.receive(
-                .concatenate(
-                    .debounce(
-                        operation: { .append(i, to: \.ints) },
-                        id: "Thrash",
-                        delay: 0.5
-                    )
+        store.receive(
+            .concatenate(
+                .debounce(
+                    operation: { .append(0, to: \.ints) },
+                    id: "Thrash",
+                    delay: 0.5
                 )
             )
-        }
+        )
         
         await waiter.wait(timeout: 5.0)
         
-        XCTAssertEqual(cancelCount, thrashCount - 1)
-        XCTAssertEqual(store.ints.count, 1)
-        XCTAssertEqual(store.ints[0], thrashCount - 1)
+        XCTAssertEqual(actualMessages.count, 1)
     }
     
     func testDebounceDataEffect() async throws {
