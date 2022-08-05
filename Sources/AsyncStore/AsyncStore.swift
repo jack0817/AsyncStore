@@ -52,6 +52,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     }
     
     deinit {
+        stateChangedSubscription?.cancel()
         receiveContinuation?.finish()
         receiveTask?.cancel()
     }
