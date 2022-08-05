@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 import SwiftUI
 
 // MARK: Store
@@ -21,10 +22,20 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     private let cancelStore = AsyncCancelStore()
     private let stateDistributor = AsyncDistributor<State>()
     
+    private let stateChangedSubject = PassthroughSubject<Void, Never>()
+    private var stateChangedSubscription: AnyCancellable? = .none
+    
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
+        
+        self.stateChangedSubscription = stateChangedSubject
+            .throttle(for: 0.2, scheduler: RunLoop.main, latest: true)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
         
         let stream = AsyncStream<Effect>(
             Effect.self,
@@ -189,7 +200,7 @@ extension AsyncStore {
     }
     
     private func objectWillChange(_ setter: @escaping (inout State) -> Void) {
-        objectWillChange.send()
+        stateChangedSubject.send()
         setter(&_state)
         stateDistributor.yield(_state)
     }
