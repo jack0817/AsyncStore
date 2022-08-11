@@ -229,6 +229,7 @@ public extension AsyncStore {
         to keyPath: KeyPath<State, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
+        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
         let effectStream = downstream(for: id)
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()
@@ -245,6 +246,7 @@ public extension AsyncStore {
         to stream: Stream,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable, Stream.Element == Value{
+        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
         let effectStream = stream
             .removeDuplicates()
             .map(mapEffect)
@@ -261,6 +263,7 @@ public extension AsyncStore {
         on keyPath: KeyPath<UState, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
+        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
         let effectStream = upstreamStore.downstream(for: id)
             .map { $0[keyPath: keyPath] }
             .removeDuplicates()

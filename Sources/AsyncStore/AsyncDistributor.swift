@@ -12,12 +12,22 @@ public struct AsyncDistributor<Element> {
     fileprivate actor ContinuationActor {
         private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
         
+        private var logTag: String {
+            "[AsyncDistributor<\(Element.self)>]"
+        }
+        
         deinit {
             finishAll()
         }
         
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
-            finish(id)
+            switch continuations[id] {
+            case .some:
+                AsyncStoreLog.info("\(logTag) overriding stream id \"\(id)\"")
+                finish(id)
+            default:
+                break
+            }
             continuations[id] = stream
         }
         
@@ -27,9 +37,9 @@ public struct AsyncDistributor<Element> {
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
-                    AsyncStoreLog.warning( "[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
+                    AsyncStoreLog.warning("\(logTag) yield to terminated stream \"\(id)\"")
                 case .dropped(let element):
-                    AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] dropped \"\(element)\"")
+                    AsyncStoreLog.warning("\(logTag) dropped \"\(element)\"")
                 default:
                     break
                 }
