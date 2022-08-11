@@ -31,7 +31,6 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self._mapError = mapError
         
         self.stateChangedSubscription = stateChangedSubject
-            //.throttle(for: 0.1, scheduler: RunLoop.main, latest: true)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
