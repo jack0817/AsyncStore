@@ -17,7 +17,13 @@ public struct AsyncDistributor<Element> {
         }
         
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
-            finish(id)
+            switch continuations[id] {
+            case .some:
+                AsyncStoreLog.info("[AsyncDistributor<\(Element.self)>] overriding stream id \"\(id)\"")
+                finish(id)
+            default:
+                break
+            }
             continuations[id] = stream
         }
         
@@ -27,7 +33,7 @@ public struct AsyncDistributor<Element> {
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
-                    AsyncStoreLog.warning( "[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
+                    AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
                 case .dropped(let element):
                     AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] dropped \"\(element)\"")
                 default:
@@ -72,10 +78,18 @@ public struct AsyncDistributor<Element> {
     }
     
     public func finish(_ id: AnyHashable) {
-        Task { await contActor.finish(id) }
+        Task { await finishAsync(id) }
+    }
+    
+    public func finishAsync(_ id: AnyHashable) async {
+        await contActor.finish(id)
     }
     
     public func finishAll() {
-        Task { await contActor.finishAll() }
+        Task { await finishAllAsync() }
+    }
+    
+    public func finishAllAsync() async {
+        await contActor.finishAll()
     }
 }
