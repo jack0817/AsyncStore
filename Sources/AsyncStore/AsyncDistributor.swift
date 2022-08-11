@@ -12,6 +12,10 @@ public struct AsyncDistributor<Element> {
     fileprivate actor ContinuationActor {
         private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
         
+        private var logTag: String {
+            "[AsyncDistributor<\(Element.self)>]"
+        }
+        
         deinit {
             finishAll()
         }
@@ -19,7 +23,7 @@ public struct AsyncDistributor<Element> {
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
             switch continuations[id] {
             case .some:
-                AsyncStoreLog.info("[AsyncDistributor<\(Element.self)>] overriding stream id \"\(id)\"")
+                AsyncStoreLog.info("\(logTag) overriding stream id \"\(id)\"")
                 finish(id)
             default:
                 break
@@ -33,9 +37,9 @@ public struct AsyncDistributor<Element> {
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
-                    AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] yield to terminated stream \"\(id)\"")
+                    AsyncStoreLog.warning("\(logTag) yield to terminated stream \"\(id)\"")
                 case .dropped(let element):
-                    AsyncStoreLog.warning("[AsyncDistributor<\(type(of: element))>] dropped \"\(element)\"")
+                    AsyncStoreLog.warning("\(logTag) dropped \"\(element)\"")
                 default:
                     break
                 }
@@ -78,18 +82,10 @@ public struct AsyncDistributor<Element> {
     }
     
     public func finish(_ id: AnyHashable) {
-        Task { await finishAsync(id) }
-    }
-    
-    public func finishAsync(_ id: AnyHashable) async {
-        await contActor.finish(id)
+        Task { await contActor.finish(id) }
     }
     
     public func finishAll() {
-        Task { await finishAllAsync() }
-    }
-    
-    public func finishAllAsync() async {
-        await contActor.finishAll()
+        Task { await contActor.finishAll() }
     }
 }
