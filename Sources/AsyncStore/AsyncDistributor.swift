@@ -10,6 +10,10 @@ import SwiftUI
 
 public struct AsyncDistributor<Element> {
     fileprivate actor ContinuationActor {
+        var count: Int {
+            continuations.count
+        }
+        
         private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
         
         private var logTag: String {
@@ -32,14 +36,19 @@ public struct AsyncDistributor<Element> {
         }
         
         func yield(_ element: Element) {
+            guard count > 0 else {
+                AsyncStoreLog.info("\(logTag) yield to no downstreams, \(type(of: element))")
+                return
+            }
+            
             var terminatedIds: [AnyHashable] = []
             continuations.forEach { (id, cont) in
                 switch cont.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
-                    AsyncStoreLog.warning("\(logTag) yield to terminated stream \"\(id)\"")
+                    AsyncStoreLog.warning("\(logTag) yield to terminated stream, id:\"\(id)\"")
                 case .dropped(let element):
-                    AsyncStoreLog.warning("\(logTag) dropped \"\(element)\"")
+                    AsyncStoreLog.warning("\(logTag) dropped \(type(of: element))  id:\"\(id)\"")
                 default:
                     break
                 }
@@ -63,6 +72,10 @@ public struct AsyncDistributor<Element> {
     private var contActor = ContinuationActor()
     
     public init() {}
+    
+    public func count() async -> Int {
+        return await contActor.count
+    }
     
     public func stream(
         for id: AnyHashable,
