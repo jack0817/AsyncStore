@@ -87,11 +87,80 @@ public extension AsyncSequence where Element: Equatable {
     }
 }
 
+// MARK: DebounceAsyncSequence
+
+struct DebounceAsyncSequence<Upstream: AsyncSequence>: AsyncSequence {
+    typealias AsyncIterator = AsyncStream<Upstream.Element>.Iterator
+    typealias Element = Upstream.Element
+
+    let upstream: Upstream
+    private let debouncer: Debouncer
+
+    init(upstream: Upstream, timeInterval: TimeInterval) {
+        self.upstream = upstream
+        self.debouncer = Debouncer(
+            upstreamIterator: upstream.makeAsyncIterator(),
+            timeInterval: timeInterval
+        )
+    }
+
+    func makeAsyncIterator() -> AsyncStream<Upstream.Element>.Iterator {
+        debouncer.stream.makeAsyncIterator()
+    }
+}
+
+extension DebounceAsyncSequence {
+    final class Debouncer {
+        public var upstreamIterator: Upstream.AsyncIterator
+        public let timeInterval: TimeInterval
+        private var elementStream: AsyncStream<Element>! = .none
+        private var continuation: AsyncStream<Element>.Continuation! = .none
+        private var debounceTask: Task<Void, Never>? = .none
+
+        public var stream: AsyncStream<Element> {
+            elementStream
+        }
+
+        init(upstreamIterator: Upstream.AsyncIterator, timeInterval: TimeInterval) {
+            self.upstreamIterator = upstreamIterator
+            self.timeInterval = timeInterval
+            self.elementStream = AsyncStream<Upstream.Element> { cont in
+                self.continuation = cont
+            }
+
+            Task {
+                while let element = try? await self.upstreamIterator.next() {
+                    debounceTask?.cancel()
+                    debounceTask = Task {
+                        do {
+                            try await Task.sleep(nanoseconds: timeInterval.nanoSeconds)
+                            continuation.yield(element)
+                        } catch { }
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension AsyncSequence {
+    func debounce(for timeInterval: TimeInterval) -> AnyAsyncSequence<Element> {
+        return DebounceAsyncSequence(upstream: self, timeInterval: timeInterval)
+            .eraseToAnyAsyncSequence()
+    }
+}
+
 // MARK: Extensions
 
 public extension Task where Success == Never, Failure == Never {
     static func trySleep(for timeInterval: TimeInterval?) async throws {
         guard let delay = timeInterval else { return }
         try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+    }
+}
+
+extension TimeInterval {
+    var nanoSeconds: UInt64 {
+        UInt64(1_000_000_000  * self)
     }
 }
