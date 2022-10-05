@@ -10,6 +10,10 @@ import XCTest
 @testable import AsyncStore
 
 final class AsyncDistributorTests: XCTestCase {
+    override class func tearDown() {
+        AsyncStoreLog.setOutput { _ in }
+    }
+    
     func testYield() async {
         let expectedValue = "Test"
         let task1Id = "Task1"
