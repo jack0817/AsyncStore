@@ -54,6 +54,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         stateChangedSubscription?.cancel()
         receiveContinuation?.finish()
         receiveTask?.cancel()
+        stateDistributor.finishAll()
+        Task { await cancelStore.cancellAll() }
     }
     
     public var state: State {
@@ -206,7 +208,7 @@ extension AsyncStore {
     }
     
     private func downstream(for id: AnyHashable) -> AsyncStream<State> {
-        stateDistributor.stream(for: id, initialValue: _state, bufferingPolicy: .bufferingNewest(1))
+        stateDistributor.stream(for: id, initialValue: _state, bufferingPolicy: .unbounded)
     }
     
     private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {

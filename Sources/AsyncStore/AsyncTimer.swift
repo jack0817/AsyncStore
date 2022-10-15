@@ -45,6 +45,12 @@ extension AsyncStore.AsyncTimer {
                 offsetTime = elapsed > sleep ? elapsed - sleep : 0
                 return .now
             } catch {
+                switch error {
+                case is CancellationError:
+                    AsyncStoreLog.info("[AsyncTimer] was cancelled")
+                default:
+                    break
+                }
                 return .none
             }
         }
