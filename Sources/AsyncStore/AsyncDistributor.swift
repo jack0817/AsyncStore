@@ -20,10 +20,6 @@ public struct AsyncDistributor<Element> {
             "[AsyncDistributor<\(Element.self)>]"
         }
         
-        deinit {
-            finishAll()
-        }
-        
         func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
             switch continuations[id] {
             case .some:

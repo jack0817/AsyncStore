@@ -54,6 +54,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         stateChangedSubscription?.cancel()
         receiveContinuation?.finish()
         receiveTask?.cancel()
+        stateDistributor.finishAll()
+        Task { await cancelStore.cancellAll() }
     }
     
     public var state: State {

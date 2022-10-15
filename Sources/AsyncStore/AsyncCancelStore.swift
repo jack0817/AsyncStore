@@ -10,10 +10,6 @@ import Foundation
 public actor AsyncCancelStore {
     private var cancellables: [AnyHashable: () -> Void] = [:]
     
-    deinit {
-        cancellAll()
-    }
-    
     func store(_ id: AnyHashable?, cancel: @escaping () -> Void) {
         guard let id = id else { return }
         self.cancel(id)
