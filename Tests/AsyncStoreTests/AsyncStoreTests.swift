@@ -138,6 +138,7 @@ final class AsyncStoreTests: XCTestCase {
     
     func testDebounceWarning() async throws {
         var actualMessages: [String] = []
+        let expectedMessage = "Concatenated debounce effects may not be debounced as they will be synchronized."
         
         AsyncStoreLog.setLevel(.warning)
         AsyncStoreLog.setOutput { log in
@@ -165,7 +166,7 @@ final class AsyncStoreTests: XCTestCase {
         
         await waiter.wait(timeout: 5.0)
         
-        XCTAssertEqual(actualMessages.count, 1)
+        XCTAssertTrue(actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
     
     func testDebounceDataEffect() async throws {
