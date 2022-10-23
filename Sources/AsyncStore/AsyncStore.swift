@@ -24,6 +24,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     
     private let stateChangedSubject = PassthroughSubject<Void, Never>()
     private var stateChangedSubscription: AnyCancellable? = .none
+    private var logTag: String { "[\(type(of: self))]" }
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -71,6 +72,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     }
     
     public func receive(_ effect: Effect) {
+        checkMainThread("\(logTag) 'receive' should only be called on from the main thread")
+
         let result = receiveContinuation?.yield(effect)
         switch result {
         case .dropped(let effect):
@@ -222,6 +225,13 @@ extension AsyncStore {
                 await reduce(effect)
             }
         }
+    }
+    
+    private func checkMainThread(_ warningMessage: String) {
+        guard !Thread.current.isMainThread else {
+            return
+        }
+        AsyncStoreLog.warning(warningMessage)
     }
     
     private func processWarnings(for effect: Effect) {
