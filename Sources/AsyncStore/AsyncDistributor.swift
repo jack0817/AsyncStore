@@ -9,37 +9,42 @@ import Foundation
 import SwiftUI
 
 public struct AsyncDistributor<Element> {
-    fileprivate actor ContinuationActor {
-        var count: Int {
-            continuations.count
+    public typealias BufferingPolicy = AsyncStream<Element>.Continuation.BufferingPolicy
+    
+    private let continuations = AsyncAtomicStore<AsyncStream<Element>.Continuation>()
+    
+    private var logTag: String {
+        "[\(type(of: self))]"
+    }
+    
+    public init() {}
+    
+    public func count() async -> Int {
+        return continuations.count()
+    }
+    
+    public func stream(
+        for id: AnyHashable,
+        initialValue: Element,
+        bufferingPolicy: BufferingPolicy
+    ) -> AsyncStream<Element> {
+        if continuations.get(id: id) != nil {
+            AsyncStoreLog.info("\(logTag) overriding stream '\(id)'")
         }
         
-        private var continuations: [AnyHashable: AsyncStream<Element>.Continuation] = [:]
-        
-        private var logTag: String {
-            "[AsyncDistributor<\(Element.self)>]"
+        return .init(bufferingPolicy: bufferingPolicy) { cont in
+            continuations.set(id: id, to: cont)
+            cont.yield(initialValue)
         }
-        
-        func add(_ stream: AsyncStream<Element>.Continuation, for id: AnyHashable) {
-            switch continuations[id] {
-            case .some:
-                AsyncStoreLog.info("\(logTag) overriding stream id \"\(id)\"")
-                finish(id)
-            default:
-                break
-            }
-            continuations[id] = stream
-        }
-        
-        func yield(_ element: Element) {
-            guard count > 0 else {
-                AsyncStoreLog.info("\(logTag) yield to no downstreams, \(type(of: element))")
-                return
-            }
-            
-            var terminatedIds: [AnyHashable] = []
-            continuations.forEach { (id, cont) in
-                switch cont.yield(element) {
+    }
+    
+    public func yield(_ element: Element) {
+        var terminatedIds: [AnyHashable] = []
+        let ids = continuations.keys()
+
+        for id in ids {
+            if let continuation = continuations.get(id: id) {
+                switch continuation.yield(element) {
                 case .terminated:
                     terminatedIds.append(id)
                     AsyncStoreLog.warning("\(logTag) yield to terminated stream, id:\"\(id)\"")
@@ -49,52 +54,18 @@ public struct AsyncDistributor<Element> {
                     break
                 }
             }
-            terminatedIds.forEach { continuations[$0] = .none }
         }
         
-        func finish(_ id: AnyHashable) {
-            continuations[id]?.finish()
-            continuations[id] = .none
-        }
-        
-        func finishAll() {
-            continuations.forEach { $1.finish() }
-            continuations = [:]
-        }
-    }
-    
-    public typealias BufferingPolicy = AsyncStream<Element>.Continuation.BufferingPolicy
-    
-    private var contActor = ContinuationActor()
-    
-    public init() {}
-    
-    public func count() async -> Int {
-        return await contActor.count
-    }
-    
-    public func stream(
-        for id: AnyHashable,
-        initialValue: Element,
-        bufferingPolicy: BufferingPolicy
-    ) -> AsyncStream<Element> {
-        .init(bufferingPolicy: bufferingPolicy) { cont in
-            Task {
-                await contActor.add(cont, for: id)
-                cont.yield(initialValue)
-            }
-        }
-    }
-    
-    public func yield(_ element: Element) {
-        Task { await contActor.yield(element) }
+        terminatedIds.forEach { continuations.set(id: $0, to: .none) }
     }
     
     public func finish(_ id: AnyHashable) {
-        Task { await contActor.finish(id) }
+        continuations.get(id: id)?.finish()
+        continuations.set(id: id, to: .none)
     }
     
     public func finishAll() {
-        Task { await contActor.finishAll() }
+        let ids = continuations.keys()
+        ids.forEach { finish($0) }
     }
 }

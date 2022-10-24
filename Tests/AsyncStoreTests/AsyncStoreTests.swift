@@ -138,6 +138,7 @@ final class AsyncStoreTests: XCTestCase {
     
     func testDebounceWarning() async throws {
         var actualMessages: [String] = []
+        let expectedMessage = "Concatenated debounce effects may not be debounced as they will be synchronized."
         
         AsyncStoreLog.setLevel(.warning)
         AsyncStoreLog.setOutput { log in
@@ -165,7 +166,7 @@ final class AsyncStoreTests: XCTestCase {
         
         await waiter.wait(timeout: 5.0)
         
-        XCTAssertEqual(actualMessages.count, 1)
+        XCTAssertTrue(actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
     
     func testDebounceDataEffect() async throws {
@@ -432,6 +433,68 @@ final class AsyncStoreTests: XCTestCase {
         parentStore.receive(.set({ $0.value = exptectedValue }))
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.value, exptectedValue)
+    }
+    
+    func testReceiveOffMainThread() async {
+        var actualMessages: [String] = []
+        let expectedMessage = "'receive' should only be called on from the main thread"
+        
+        AsyncStoreLog.setLevel(.warning)
+        AsyncStoreLog.setOutput {
+            actualMessages.append($0)
+            print($0)
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let expectation = expectation(description: "testReceiveOffMainThread")
+        expectation.expectedFulfillmentCount = 1
+        
+        DispatchQueue.global(qos: .background).async {
+            store.receive(.none)
+            expectation.fulfill()
+        }
+        
+        await waitForExpectations(timeout: 5.0)
+        
+        XCTAssertTrue(actualMessages.contains(where: { $0.contains(expectedMessage) }))
+    }
+    
+    func testReceiveOnMainThread() async {
+        var actualMessages: [String] = []
+        let expectedMessage = "'receive' should only be called on from the main thread"
+        
+        AsyncStoreLog.setLevel(.warning)
+        AsyncStoreLog.setOutput {
+            actualMessages.append($0)
+            print($0)
+        }
+        
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let expectation = expectation(description: "testReceiveOffMainThread")
+        expectation.expectedFulfillmentCount = 1
+        
+        DispatchQueue.main.async {
+            store.receive(.none)
+            expectation.fulfill()
+        }
+        
+        await waitForExpectations(timeout: 5.0)
+        
+        XCTAssertTrue(!actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
 }
 

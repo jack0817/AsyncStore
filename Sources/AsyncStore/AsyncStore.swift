@@ -24,6 +24,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     
     private let stateChangedSubject = PassthroughSubject<Void, Never>()
     private var stateChangedSubscription: AnyCancellable? = .none
+    private var logTag: String { "[\(type(of: self))]" }
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
@@ -55,7 +56,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         receiveContinuation?.finish()
         receiveTask?.cancel()
         stateDistributor.finishAll()
-        Task { await cancelStore.cancellAll() }
+        cancelStore.cancellAll()
     }
     
     public var state: State {
@@ -71,6 +72,8 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     }
     
     public func receive(_ effect: Effect) {
+        checkMainThread("\(logTag) 'receive' should only be called on from the main thread")
+
         let result = receiveContinuation?.yield(effect)
         switch result {
         case .dropped(let effect):
@@ -128,7 +131,7 @@ extension AsyncStore {
                 let effect = await execute(operation)
                 await reduce(effect)
             }
-            await cancelStore.store(id, cancel: task.cancel)
+            cancelStore.store(id, cancel: task.cancel)
             guard awaitTask else { return }
             await task.value
         case .sleep(let time):
@@ -146,7 +149,7 @@ extension AsyncStore {
                     await reduce(effect)
                 }
             }
-            await cancelStore.store(id, cancel: timerTask.cancel)
+            cancelStore.store(id, cancel: timerTask.cancel)
         case .debounce(let operation, let id, let delay):
             let parentTask: Task<Task<Void, Never>, Never> = Task {
                 Task {
@@ -158,11 +161,11 @@ extension AsyncStore {
                 }
             }
             let debounceTask = await parentTask.value
-            await cancelStore.store(id, cancel: debounceTask.cancel)
+            cancelStore.store(id, cancel: debounceTask.cancel)
             guard awaitTask else { return }
             await debounceTask.value
         case .cancel(let id):
-            await cancelStore.cancel(id)
+            cancelStore.cancel(id)
         case .merge(let effects):
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
@@ -224,6 +227,11 @@ extension AsyncStore {
         }
     }
     
+    private func checkMainThread(_ warningMessage: String) {
+        guard !Thread.current.isMainThread else { return }
+        AsyncStoreLog.warning(warningMessage)
+    }
+    
     private func processWarnings(for effect: Effect) {
         switch effect {
         case .concatenate(let effects) where effects.contains(where: { $0.isDebounce }):
@@ -248,10 +256,8 @@ public extension AsyncStore {
             .removeDuplicates()
             .map(mapEffect)
         
-        Task {
-            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-            await cancelStore.store(id, cancel: bindTask.cancel)
-        }
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        cancelStore.store(id, cancel: bindTask.cancel)
     }
     
     func bind<Value, Stream: AsyncSequence>(
@@ -264,10 +270,8 @@ public extension AsyncStore {
             .removeDuplicates()
             .map(mapEffect)
         
-        Task {
-            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-            await cancelStore.store(id, cancel: bindTask.cancel)
-        }
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        cancelStore.store(id, cancel: bindTask.cancel)
     }
     
     func bind<UState, UEnv, Value>(
@@ -282,10 +286,8 @@ public extension AsyncStore {
             .removeDuplicates()
             .map(mapEffect)
         
-        Task {
-            let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-            await cancelStore.store(id, cancel: bindTask.cancel)
-        }
+        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        cancelStore.store(id, cancel: bindTask.cancel)
     }
 }
 

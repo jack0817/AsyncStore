@@ -55,22 +55,23 @@ final class AsyncDistributorTests: XCTestCase {
     func testOverrideLogging() async {
         let overrideId = "Test"
         var actualLogs: [String] = []
-        
+        let expectedMessage = "overriding stream"
+
         let expectation = expectation(description: "testOverrideLogging")
         expectation.expectedFulfillmentCount = 1
-        
+
         AsyncStoreLog.setLevel(.info)
         AsyncStoreLog.setOutput { message in
             actualLogs.append(message)
             print(message)
             expectation.fulfill()
         }
-        
+
         let distributor = AsyncDistributor<String>()
         _ = distributor.stream(for: overrideId, initialValue: "Test 1", bufferingPolicy: .unbounded)
         _ = distributor.stream(for: overrideId, initialValue: "Test 2", bufferingPolicy: .unbounded)
-        
+
         await waitForExpectations(timeout: 5.0)
-        XCTAssertEqual(actualLogs.count, 1)
+        XCTAssertTrue(actualLogs.contains(where: { $0.contains(expectedMessage) }))
     }
 }

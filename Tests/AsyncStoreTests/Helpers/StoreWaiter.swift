@@ -7,13 +7,25 @@
 
 import Foundation
 import XCTest
-@testable import AsyncStore
 import SwiftUI
+import Atomics
+@testable import AsyncStore
 
 final class StoreWaiter<State: Equatable, Env> {
+    enum State: UInt8, AtomicValue {
+        case ready
+        case timedOut
+        case completed
+    }
+    
+    enum Error: Swift.Error {
+        case failedToChangeState(from: StoreWaiter.State, to: StoreWaiter.State, current: StoreWaiter.State)
+    }
+    
+    let state = ManagedAtomic<StoreWaiter.State>(.ready)
     let count: Int
     private var counterTask: Task<Int, Never>! = .none
-    private var waitTask: Task<Bool, Never>! = .none
+    private var waitTask: Task<Void, Never>! = .none
     
     init(store: AsyncStore<State, Env>, count: Int) {
         self.count = count
@@ -29,10 +41,11 @@ final class StoreWaiter<State: Equatable, Env> {
             var streamCount = 0
             do {
                 for try await _ in stream {
-                    guard !Task.isCancelled else { break }
+                    guard state.load(ordering: .sequentiallyConsistent) == .ready else { break }
                     streamCount += 1
-                    if streamCount >= count {
+                    if streamCount == count {
                         waitTask?.cancel()
+                        try setState(from: .ready, to: .completed)
                     }
                 }
             } catch {
@@ -53,22 +66,40 @@ final class StoreWaiter<State: Equatable, Env> {
             defer { counterTask?.cancel() }
             do {
                 try await Task.trySleep(for: timeout)
-                return true
+                try setState(from: .ready, to: .timedOut)
             } catch {
-                return false
+                print(error)
             }
         }
     
         let actualCount = await counterTask.value
-        let didTimeOut = await waitTask.value
+        await waitTask.value
+        let currentState = state.load(ordering: .sequentiallyConsistent)
         
-        switch didTimeOut {
-        case true:
+        switch currentState {
+        case .timedOut:
             XCTFail("Store timed out after \(timeout) seconds. Actual:\(actualCount) Expected:\(count)")
-        case _ where actualCount != count:
+        case .completed where actualCount != count:
             XCTFail("Incorrect count. Actual:\(actualCount) Expected:\(count)")
         default:
             return
+        }
+    }
+    
+    private func setState(from fromState: StoreWaiter.State, to toState: StoreWaiter.State) throws {
+        let exchange = state.compareExchange(
+            expected: fromState,
+            desired: toState,
+            ordering: .sequentiallyConsistent
+        )
+        
+        if !exchange.exchanged {
+            let currentState = state.load(ordering: .sequentiallyConsistent)
+            throw StoreWaiter.Error.failedToChangeState(
+                from: fromState,
+                to: toState,
+                current: currentState
+            )
         }
     }
 }
