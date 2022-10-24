@@ -28,7 +28,11 @@ public struct AsyncDistributor<Element> {
         initialValue: Element,
         bufferingPolicy: BufferingPolicy
     ) -> AsyncStream<Element> {
-        .init(bufferingPolicy: bufferingPolicy) { cont in
+        if continuations.get(id: id) != nil {
+            AsyncStoreLog.info("\(logTag) overriding stream '\(id)'")
+        }
+        
+        return .init(bufferingPolicy: bufferingPolicy) { cont in
             continuations.set(id: id, to: cont)
             cont.yield(initialValue)
         }
