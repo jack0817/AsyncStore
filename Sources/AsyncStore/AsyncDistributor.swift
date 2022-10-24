@@ -62,6 +62,6 @@ public struct AsyncDistributor<Element> {
     
     public func finishAll() {
         let ids = continuations.keys()
-        for id in ids { finish(id) }
+        ids.forEach { finish($0) }
     }
 }
