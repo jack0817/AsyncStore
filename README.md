@@ -4,7 +4,7 @@ A brief description of the framework
 
 ## Table of Contents
 
-* Coming Soon! *
+*Coming Soon!*
 
 ### 1. Store
 
