@@ -16,7 +16,7 @@ For the purposes of this README we will be constructing a standard UserStore.
 
 ```swift
 struct UserState {
-    let user: User? = .none
+    var user: User? = .none
 }
 ```
 
@@ -29,6 +29,20 @@ struct UserEnvironment {
 ```
 
 ##### Store
+
+```swift
+typealias UserStore = AsyncStore<UserState, UserEnvironment>
+
+extension UserStore {
+    convenience init(
+        _ state: UserState = .init(), 
+        env: .init(), 
+        mapError: { error in 
+            return .none
+        }
+    )
+}
+```
 
 ##### Error Handling
 
