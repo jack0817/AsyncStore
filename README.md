@@ -38,10 +38,7 @@ extension UserStore {
     convenience init(
         _ state: UserState = .init(), 
         env: .init(), 
-        mapError: { error in
-            print("\(error)")
-            return .none
-        }
+        mapError: ErrorHandler().mapError
     )
 }
 
