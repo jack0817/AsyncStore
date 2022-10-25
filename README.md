@@ -1,6 +1,6 @@
 # AsyncStore
 
-A brief description of the framework
+*Coming Soon!*
 
 ## Table of Contents
 
@@ -134,6 +134,43 @@ func initializedAppe() {
 ```
 
 ### 3. Bindings
+
+AsyncStores can bind (or subscribe) to any AsyncSequence.
+
+```swift
+extension UserStore {
+    convenience init(
+        _ state: UserState = .init(), 
+        env: .init(), 
+        mapError: ErrorHandler().mapError
+    ) {
+        // MARK: Bind to KeyPath
+        bind(
+            id: "UserStore.searchText", 
+            to: \.searchText, 
+            mapEffect: mapSearchTextToEffect
+        )
+        
+        // MARK: Bind to AsyncSequence
+        bind(
+            id: "UserStore.searchText", 
+            stream: map.healthKitService().stream()
+                .debounce(for: 2.0), 
+            mapEffect: mapSearchTextToEffect
+        )
+    }
+    
+    // MARK: Bind to another AsyncStore
+    func bind(to appStore: AppStore) {
+        bind(
+            id: "UserStore.AppStore.isInitialized", 
+            to: appStore, 
+            on: \.isInitialized, 
+            mapEffect: mapIsAppInitializedToEffect
+        )
+    }
+}
+``` 
 
 *Coming Soon!*
 
