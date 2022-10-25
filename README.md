@@ -58,7 +58,11 @@ extension UserStore {
 
 fileprivate extension UserStore {
     func loginTask(_ credentials: Credientials) async throws -> Effect {
-        let user = try await env.authService.authenticate(credentials.userName, credentials.password)
+        let user = try await env.authService.authenticate(
+            userName: credentials.userName, 
+            password: credentials.password
+        )
+
         return .set(\.user, to: user)
     }
     
