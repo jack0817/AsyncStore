@@ -67,7 +67,7 @@ fileprivate extension UserStore {
     }
     
     func logoutTask() async throws -> Effect {
-        let isLoggedOut = try await env.authService.logout()
+        try await env.authService.logout()
         return .set(\.user, to: .none)
     }
 }
