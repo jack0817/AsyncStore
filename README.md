@@ -94,8 +94,11 @@ fileprivate extension UserStore {
 
 ### 2. Effects
 - none
+  - Results in a no-op.  Essentially a void operation
 - set((inout State) -> Void)
+  - Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores
 - task(operation: () async throws -> Effect, id: AnyHashable?)
+  - Executes an asyncthrough task, Operations must be `async throws -> Effect`
 - sleep(TimeInterval)
 - timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
 - cancel(AnyHashable)
