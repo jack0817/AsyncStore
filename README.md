@@ -17,6 +17,7 @@ For the purposes of this README we will be constructing a standard UserStore.
 ```swift
 struct UserState {
     var user: User? = .none
+    var errorDialog: Dialog? = .none
 }
 ```
 
@@ -37,16 +38,34 @@ extension UserStore {
     convenience init(
         _ state: UserState = .init(), 
         env: .init(), 
-        mapError: { error in 
+        mapError: { error in
+            print("\(error)")
             return .none
         }
     )
 }
+
+// MARK: Public API
+
+extension UserStore {
+    func login(_ credentials: Credientials) {
+        receive(.dataTask(credentials, loginTask))
+    }
+}
+
+// MARK: Private API (Tasks, Effect mapping, etc..)
+
+fileprivate extension UserStore {
+    func loginTask(_ credentials: Credientials) async throws -> Effect {
+        let user = try await env.authService.authenticate(credentials.userName, credentials.password)
+        return .set(\.user, to: user)
+    }
+}
+
 ```
 
 ##### Error Handling
 
-#### 1.2 Example
 ### 2. Effects
 ### 3. Creating a Single Source of Truth
 
