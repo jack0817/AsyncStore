@@ -66,6 +66,22 @@ fileprivate extension UserStore {
 
 ##### Error Handling
 
+```swift
+fileprivate extension UserStore {
+    struct ErrorHandler {
+        func mapError(_ error: Error) -> Effect {
+            switch error {
+            case let authError as AuthenticationError:
+                return .set(\.dialog, to: .authDialog(authError))
+            default:
+                print("\(error)")
+                return .none
+            }
+        }
+    }
+}
+```
+
 ### 2. Effects
 ### 3. Creating a Single Source of Truth
 
