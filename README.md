@@ -95,22 +95,24 @@ fileprivate extension UserStore {
 ### 2. Effects
 - none
   - Results in a no-op.  Essentially a void operation
-- set((inout State) -> Void)
+- set
   - Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores
-- task(operation: () async throws -> Effect, id: AnyHashable?)
+- task
   - Executes an asynchronous task, Operations must be `async throws -> Effect`
-- sleep(TimeInterval)
+- sleep
   - Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time.  
-- timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
+- timer
   - Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed).
-- cancel(AnyHashable)
+- cancel
   - Cancels any in-flight task, stream or binding for the specified Idientifier
-- merge(effects: [Effect])
+- merge
   - Reduces all effects in no particular order
-- concatenate(effects: [Effect])
+- concatenate
   - Reduces all effects in sequential order
 
 #### 2.1 Effect Composition
+
+Becuase of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
 
 ```swift
 func initializedAppe() {
