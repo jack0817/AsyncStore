@@ -5,7 +5,19 @@ A brief description of the framework
 ## Table of Contents
 
 ### 1. Store
+
+An AsyncStore consists of 2 componets, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+
 #### 1.1 Anatomy of an AsyncStore
+
+##### State
+
+##### Environment
+
+##### Store
+
+##### Error Handling
+
 #### 1.2 Example
 ### 2. Effects
 ### 3. Creating a Single Source of Truth
