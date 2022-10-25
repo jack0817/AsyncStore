@@ -169,6 +169,16 @@ extension UserStore {
             mapEffect: mapIsAppInitializedToEffect
         )
     }
+    
+    // MARK: Remove Bindings
+    func unbind() {
+        let cancelEffects = [
+            "UserStore.searchText", 
+            "UserStore.HealthKitService", 
+            "UserStore.AppStore.isInitialized"
+        ].map { id in Effect.cancel(id) }
+        receive(.merge(cancelEffects))
+    }
 }
 ``` 
 
