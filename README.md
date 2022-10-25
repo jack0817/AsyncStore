@@ -4,9 +4,11 @@ A brief description of the framework
 
 ## Table of Contents
 
+* Coming Soon! *
+
 ### 1. Store
 
-An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining to the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
 
 #### 1.1 Anatomy of an AsyncStore
 
@@ -132,6 +134,8 @@ func initializedAppe() {
 ```
 
 ### 3. Bindings
+
+* Coming Soon! *
 
 ### 4. Creating a Single Source of Truth
 
