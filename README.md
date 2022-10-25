@@ -153,7 +153,7 @@ extension UserStore {
         
         // MARK: Bind to AsyncSequence
         bind(
-            id: "UserStore.searchText", 
+            id: "UserStore.HealthKitService", 
             stream: map.healthKitService().stream()
                 .debounce(for: 2.0), 
             mapEffect: mapSearchTextToEffect
@@ -172,11 +172,9 @@ extension UserStore {
 }
 ``` 
 
-*Coming Soon!*
-
 ### 4. Creating a Single Source of Truth
 
-Stores can be bound to other stores.
+Stores can be bound to other stores to create a Single Source of Truth.
 
 ```swift
 struct SSOT: ViewModifier {
