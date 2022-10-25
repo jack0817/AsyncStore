@@ -177,7 +177,7 @@ extension UserStore {
             "UserStore.HealthKitService", 
             "UserStore.AppStore.isInitialized"
         ].map { id in Effect.cancel(id) }
-        receive(.merge(cancelEffects))
+        receive(.merge(effects: cancelEffects))
     }
 }
 ``` 
