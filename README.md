@@ -135,7 +135,7 @@ func initializedAppe() {
 
 ### 3. Bindings
 
-* Coming Soon! *
+*Coming Soon!*
 
 ### 4. Creating a Single Source of Truth
 
