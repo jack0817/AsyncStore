@@ -206,7 +206,7 @@ struct SSOT: ViewModifier {
 ```swift
 @main
 struct MyApp: App {
-    @StateObject private var ssot = SSOT()
+    @State private var ssot = SSOT()
 
     var body: some Scene {
         WindowGroup {
