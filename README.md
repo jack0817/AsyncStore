@@ -48,6 +48,10 @@ extension UserStore {
     func login(_ credentials: Credientials) {
         receive(.dataTask(credentials, loginTask))
     }
+    
+    func logout() {
+        receive(.task(logoutTask))
+    }
 }
 
 // MARK: Private API (Tasks, Effect mapping, etc..)
@@ -56,6 +60,15 @@ fileprivate extension UserStore {
     func loginTask(_ credentials: Credientials) async throws -> Effect {
         let user = try await env.authService.authenticate(credentials.userName, credentials.password)
         return .set(\.user, to: user)
+    }
+    
+    func logoutTask() async throws -> Effect {
+        let isLoggedOut = try await env.authService.logout()
+        if isLoggedOut {
+            return .set(\.user, to: .none)
+        } else {
+            return .set(\.dialog, to: .failedTryAgain)
+        }
     }
 }
 
