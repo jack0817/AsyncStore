@@ -45,26 +45,6 @@ struct MyApp: App {
 
 ### 4. Code
 
-        ```json
-        {
-            "firstName": "John",
-            "lastName": "Smith",
-            "age": 25
-        }
-        ```
-
 ## Section 2
 
 ## Section 3
-
-```ruby
-require 'redcarpet'
-markdown = Redcarpet.new("Hello World!")
-puts markdown.to_html
-```
-
-```swift
-struct Animal {
-    let nickName : String?
-}
-```
