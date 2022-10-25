@@ -96,7 +96,9 @@ fileprivate extension UserStore {
 
 #### 2.1 Effect Composition
 
-### 3. Creating a Single Source of Truth
+### 3. Bindings
+
+### 4. Creating a Single Source of Truth
 
 Stores can be bound to other stores.
 
@@ -130,9 +132,3 @@ struct MyApp: App {
     }
 }
 ```
-
-### 4. Code
-
-## Section 2
-
-## Section 3
