@@ -100,15 +100,15 @@ fileprivate extension UserStore {
 - task(operation: () async throws -> Effect, id: AnyHashable?)
   - Executes an asynchronous task, Operations must be `async throws -> Effect`
 - sleep(TimeInterval)
-  - Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for "at least" this amount of time.  
+  - Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time.  
 - timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
-  - Creates an Asynchronous timer that will execute an effect at the specified interval.
+  - Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed).
 - cancel(AnyHashable)
   - Cancels any in-flight task, stream or binding for the specified Idientifier
 - merge(effects: [Effect])
   - Reduces all effects in no particular order
 - concatenate(effects: [Effect])
-  - Reduces all effect in sequential order
+  - Reduces all effects in sequential order
 
 #### 2.1 Effect Composition
 
