@@ -93,6 +93,14 @@ fileprivate extension UserStore {
 ```
 
 ### 2. Effects
+- none
+- set((inout State) -> Void)
+- task(operation: () async throws -> Effect, id: AnyHashable?)
+- sleep(TimeInterval)
+- timer(TimeInterval, id: AnyHashable, mapEffect: (Date) -> Effect)
+- cancel(AnyHashable)
+- merge(effects: [Effect])
+- concatenate(effects: [Effect])
 
 #### 2.1 Effect Composition
 
