@@ -104,6 +104,23 @@ fileprivate extension UserStore {
 
 #### 2.1 Effect Composition
 
+```swift
+func initializedAppe() {
+    receive(
+        .concatenate(
+            .set(\.isLoading, to: true),
+            .merge(
+                .task(loadLocationsTask),
+                .task(loadPhotosTask),
+                .task(loadFavorites)
+            )
+            .task(buildSectionsTask),
+            .set(\.isLoading, to: false)
+        )
+    )
+}
+```
+
 ### 3. Bindings
 
 ### 4. Creating a Single Source of Truth
