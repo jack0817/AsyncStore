@@ -12,36 +12,36 @@ A brief description of the framework
 
 Stores can be bound to other stores.
 
-    ```swift
-    struct SSOT: ViewModifier {
-        let appStore = AppStore()
-        let userStore = UserStore()
-        
-        init() {
-            userStore.bind(to: appStore)
-        }
-        
-        func body(content: Content) -> some View {
-            content.
-                .environmentObject(userSTore)
-                .environmentObject(appStore)
-        }
-    }
-    ```
+```swift
+struct SSOT: ViewModifier {
+    let appStore = AppStore()
+    let userStore = UserStore()
     
-    ```swift
-    @main
-    struct MyApp: App {
-        @StateObject private var ssot = SSOT()
+    init() {
+        userStore.bind(to: appStore)
+    }
+    
+    func body(content: Content) -> some View {
+        content.
+            .environmentObject(userSTore)
+            .environmentObject(appStore)
+    }
+}
+```
 
-        var body: some Scene {
-            WindowGroup {
-                AppView()
-                    .modifier(ssot)
-            }
+```swift
+@main
+struct MyApp: App {
+    @StateObject private var ssot = SSOT()
+
+    var body: some Scene {
+        WindowGroup {
+            AppView()
+                .modifier(ssot)
         }
     }
-    ```
+}
+```
 
 ### 4. Code
 
