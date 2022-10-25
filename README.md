@@ -68,11 +68,7 @@ fileprivate extension UserStore {
     
     func logoutTask() async throws -> Effect {
         let isLoggedOut = try await env.authService.logout()
-        if isLoggedOut {
-            return .set(\.user, to: .none)
-        } else {
-            return .set(\.dialog, to: .failedTryAgain)
-        }
+        return .set(\.user, to: .none)
     }
 }
 
