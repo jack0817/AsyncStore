@@ -69,7 +69,7 @@ fileprivate extension UserStore {
         func mapError(_ error: Error) -> Effect {
             switch error {
             case let authError as AuthenticationError:
-                return .set(\.dialog, to: .authDialog(authError))
+                return .set(\.dialog, to: .loginFailed(authError))
             default:
                 print("\(error)")
                 return .none
