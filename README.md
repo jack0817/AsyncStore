@@ -6,13 +6,27 @@ A brief description of the framework
 
 ### 1. Store
 
-An AsyncStore consists of 2 componets, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
 
 #### 1.1 Anatomy of an AsyncStore
 
+For the purposes of this README we will be constructing a standard UserStore.
+
 ##### State
 
+```swift
+struct UserState {
+    let user: User? = .none
+}
+```
+
 ##### Environment
+
+```swift
+struct UserEnvironment {
+    let authService = AuthService()
+}
+```
 
 ##### Store
 
@@ -35,7 +49,7 @@ struct SSOT: ViewModifier {
     
     func body(content: Content) -> some View {
         content.
-            .environmentObject(userSTore)
+            .environmentObject(userStore)
             .environmentObject(appStore)
     }
 }
