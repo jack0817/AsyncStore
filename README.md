@@ -122,7 +122,7 @@ fileprivate extension UserStore {
 
 ### 2. Effects
 
-Effects are pre-defined actions for the AsyncStore.  Effect begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
+Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
 
 - none
   - Results in a no-op.  Essentially a void operation
@@ -185,7 +185,7 @@ extension UserStore {
             id: "UserStore.HealthKitService", 
             stream: map.healthKitService().stream()
                 .debounce(for: 2.0), 
-            mapEffect: mapSearchTextToEffect
+            mapEffect: mapHealthKitEventToEffect
         )
     }
     
