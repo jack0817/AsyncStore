@@ -164,7 +164,7 @@ func initializedAppe() {
 
 ### 3. Bindings
 
-AsyncStores can bind (or subscribe) to any AsyncSequence.
+AsyncStores can bind (or subscribe) to any AsyncSequence and they can create streams for binding purposes either from a state keyPath or from another AsyncStore.
 
 ```swift
 extension UserStore {
