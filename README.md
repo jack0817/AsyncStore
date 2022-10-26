@@ -161,7 +161,7 @@ func initializedAppe() {
             .merge(
                 .task(loadLocationsTask),
                 .task(loadPhotosTask),
-                .task(loadFavorites)
+                .task(loadFavoritesTask)
             )
             .task(buildSectionsTask),
             .set(\.isLoading, to: false)
