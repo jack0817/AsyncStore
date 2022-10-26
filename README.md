@@ -93,6 +93,10 @@ struct LoginView: View {
             TextField("User Name", text: $userName)
             SecureField("Password", text: $password)
             Button("Login", action: { userStore.login(credentials) })
+            
+            if let dialog = userStore.errorDialog {
+                Text(dialog.message)
+            }
         }
     }
 }
