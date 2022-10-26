@@ -4,7 +4,11 @@
 
 ## Table of Contents
 
-*Coming Soon!*
+1. Store
+   1.1 Anatomy of an AsyncStore
+2. Effects
+3. Bindings
+4. Single Source of Truth
 
 ### 1. Store
 
