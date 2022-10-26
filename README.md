@@ -121,6 +121,9 @@ fileprivate extension UserStore {
 ```
 
 ### 2. Effects
+
+Effects are pre-defined actions for the AsyncStore.  Effect begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. '.none' or a '.set').
+
 - none
   - Results in a no-op.  Essentially a void operation
 - set
