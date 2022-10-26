@@ -13,7 +13,9 @@
 
 ### 1. Store
 
-AsyncStores are first and foremost `ObservableObject`s so they can take advantage of all of SwiftUI's environment features including `@EnvironmentObject` and `@StateObject`. An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining to the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. AsyncStores are not intended to belong to a single view but rather to mutliple views and can be shared via SwiftUI's environment. 
+AsyncStores are first and foremost `ObservableObject`s so they can take advantage of all of SwiftUI's environment features including `@EnvironmentObject` and `@StateObject`. An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values and functions pertaining to the User of the app). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+
+*NOTE:* AsyncStores are not intended to belong to a single view but rather to mutliple views and can be shared via SwiftUI's environment. 
 
 #### 1.1 Anatomy of an AsyncStore
 
