@@ -76,6 +76,28 @@ fileprivate extension UserStore {
 
 ```
 
+##### Usage
+
+```swift
+struct LoginView: View {
+    @StateObject private var userStore = UserStore()
+    @State private var userName = ""
+    @State private var password = ""
+    
+    private var credentials: Credentials {
+        .init(userName: userName, password: password)
+    }
+    
+    var body: some View {
+        VStack {
+            TextField("User Name", text: $userName)
+            SecureField("Password", text: $password)
+            Button("Login", action: { userStore.login(credentials) })
+        }
+    }
+}
+```
+
 ##### Error Handling
 
 ```swift
