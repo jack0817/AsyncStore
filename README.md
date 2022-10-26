@@ -54,7 +54,7 @@ extension UserStore {
 // MARK: Public API
 
 extension UserStore {
-    func login(_ credentials: Credientials) {
+    func login(_ credentials: Credentials) {
         receive(.dataTask(credentials, loginTask))
     }
     
@@ -66,7 +66,7 @@ extension UserStore {
 // MARK: Private API (Tasks, Effect mapping, etc..)
 
 fileprivate extension UserStore {
-    func loginTask(_ credentials: Credientials) async throws -> Effect {
+    func loginTask(_ credentials: Credentials) async throws -> Effect {
         let user = try await env.authService.authenticate(
             userName: credentials.userName, 
             password: credentials.password
