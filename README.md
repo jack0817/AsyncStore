@@ -4,11 +4,18 @@
 
 ## Table of Contents
 
-*Coming Soon!*
+1. Store
+   - 1.1 Anatomy of an AsyncStore
+2. Effects
+   - 2.1 Effect Composition
+3. Bindings
+4. Single Source of Truth
 
 ### 1. Store
 
-An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values pertaining to the User model). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+AsyncStores are first and foremost `ObservableObject`s so they can take advantage of all of SwiftUI's environment features including `@EnvironmentObject` and `@StateObject`. An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values and functions pertaining to the User of the app). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+
+*NOTE:* AsyncStores are not intended to belong to a single view but rather to mutliple views and can be shared via SwiftUI's environment. 
 
 #### 1.1 Anatomy of an AsyncStore
 
@@ -47,7 +54,7 @@ extension UserStore {
 // MARK: Public API
 
 extension UserStore {
-    func login(_ credentials: Credientials) {
+    func login(_ credentials: Credentials) {
         receive(.dataTask(credentials, loginTask))
     }
     
@@ -59,7 +66,7 @@ extension UserStore {
 // MARK: Private API (Tasks, Effect mapping, etc..)
 
 fileprivate extension UserStore {
-    func loginTask(_ credentials: Credientials) async throws -> Effect {
+    func loginTask(_ credentials: Credentials) async throws -> Effect {
         let user = try await env.authService.authenticate(
             userName: credentials.userName, 
             password: credentials.password
@@ -74,6 +81,33 @@ fileprivate extension UserStore {
     }
 }
 
+```
+
+##### Usage
+
+```swift
+struct LoginView: View {
+    @StateObject private var userStore = UserStore()
+    @State private var userName = ""
+    @State private var password = ""
+    
+    private var credentials: Credentials {
+        .init(userName: userName, password: password)
+    }
+    
+    var body: some View {
+        VStack {
+            TextField("User Name", text: $userName)
+            SecureField("Password", text: $password)
+            Button("Login", action: { userStore.login(credentials) })
+            Button("Logout", action: userStore.logout)
+            
+            if let dialog = userStore.errorDialog {
+                Text(dialog.message)
+            }
+        }
+    }
+}
 ```
 
 ##### Error Handling
@@ -95,6 +129,9 @@ fileprivate extension UserStore {
 ```
 
 ### 2. Effects
+
+Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
+
 - none
   - Results in a no-op.  Essentially a void operation
 - set
@@ -124,7 +161,7 @@ func initializedAppe() {
             .merge(
                 .task(loadLocationsTask),
                 .task(loadPhotosTask),
-                .task(loadFavorites)
+                .task(loadFavoritesTask)
             )
             .task(buildSectionsTask),
             .set(\.isLoading, to: false)
@@ -135,7 +172,7 @@ func initializedAppe() {
 
 ### 3. Bindings
 
-AsyncStores can bind (or subscribe) to any AsyncSequence.
+AsyncStores can bind (or subscribe) to any AsyncSequence and they can create streams for binding purposes either from a state keyPath or from another AsyncStore.
 
 ```swift
 extension UserStore {
@@ -156,7 +193,7 @@ extension UserStore {
             id: "UserStore.HealthKitService", 
             stream: map.healthKitService().stream()
                 .debounce(for: 2.0), 
-            mapEffect: mapSearchTextToEffect
+            mapEffect: mapHealthKitEventToEffect
         )
     }
     
