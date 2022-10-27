@@ -152,7 +152,7 @@ Effects are pre-defined actions for the AsyncStore.  Effects begat other effects
 Becuase of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
 
 ```swift
-func initializedAppe() {
+func initializeApp() {
     receive(
         .concatenate(
             .set(\.isLoading, to: true),
