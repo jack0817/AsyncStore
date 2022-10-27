@@ -129,6 +129,14 @@ fileprivate extension UserStore {
 ### 2. Effects
 
 Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
+Effects can be sent to an AsyncStore via the `receive` func
+
+```swift
+func loadData() {
+    receive(.task(loadDataTask))
+}
+```
+
 
 | Effect | Description |
 | --- | --- |
