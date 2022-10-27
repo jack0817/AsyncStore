@@ -140,7 +140,6 @@ Effects are pre-defined actions for the AsyncStore.  Effects begat other effects
 | `cancel` | Cancels any in-flight task, stream or binding for the specified Idientifier |
 | `merge` | Reduces all effects in no particular order |
 | `concatenate` | Reduces all effects in sequential order |
-| --- | --- |
 
 #### 2.1 Effect Composition
 
