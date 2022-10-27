@@ -8,7 +8,7 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
 
 1. [Store](###1.-Store)
    - 1.1 Anatomy of an AsyncStore
-2. Effects
+2. [Effects](#Effects)
    - 2.1 Effect Composition
    - 2.2 Task Cancellation
 3. Bindings
