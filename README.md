@@ -6,7 +6,7 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
 
 ## Table of Contents
 
-1. [Store](#1. Store)
+1. [Store](###1.-Store)
    - 1.1 Anatomy of an AsyncStore
 2. Effects
    - 2.1 Effect Composition
