@@ -134,19 +134,13 @@ Effects are pre-defined actions for the AsyncStore.  Effects begat other effects
 | --- | --- |
 | `none` | Results in a no-op.  Essentially a void operation |
 | `set` | Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores |
-
-- task
-  - Executes an asynchronous task, Operations must be `async throws -> Effect`
-- sleep
-  - Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time.  
-- timer
-  - Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed).
-- cancel
-  - Cancels any in-flight task, stream or binding for the specified Idientifier
-- merge
-  - Reduces all effects in no particular order
-- concatenate
-  - Reduces all effects in sequential order
+| `task` | Executes an asynchronous task, Operations must be `async throws -> Effect` |
+| `sleep` | Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time. |
+| `timer` | Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed). |
+| `cancel` | Cancels any in-flight task, stream or binding for the specified Idientifier |
+| `merge` | Reduces all effects in no particular order |
+| `concatenate` | Reduces all effects in sequential order |
+| --- | --- |
 
 #### 2.1 Effect Composition
 
