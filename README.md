@@ -130,15 +130,11 @@ fileprivate extension UserStore {
 
 Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
 
-| Command | Description |
+| Effect | Description |
 | --- | --- |
-| `git status` | List all *new or modified* files |
-| `git diff` | Show file differences that **haven't been** staged |
+| `none` | Results in a no-op.  Essentially a void operation |
+| `set` | Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores |
 
-- none
-  - Results in a no-op.  Essentially a void operation
-- set
-  - Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores
 - task
   - Executes an asynchronous task, Operations must be `async throws -> Effect`
 - sleep
