@@ -138,7 +138,6 @@ func loadData() {
 }
 ```
 
-
 | Effect | Description |
 | --- | --- |
 | `none` | Results in a no-op.  Essentially a void operation |
@@ -183,11 +182,11 @@ func loadData() {
 ```
 
 ```swift
-func loadData() {
+func cancelLoad() {
     recieve(.cancel("CancelTask"))
 }
 ```
-**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.
+**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
 
 ### 3. Bindings
 
