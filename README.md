@@ -10,6 +10,7 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
    - 1.1 Anatomy of an AsyncStore
 2. Effects
    - 2.1 Effect Composition
+   - 2.2 Task Cancellation
 3. Bindings
 4. Single Source of Truth
 
@@ -169,6 +170,24 @@ func initializeApp() {
     )
 }
 ```
+
+#### 2.2 Task Cancellation
+
+Task and Timer effects can be cancelled by assigning these effects identifiers (of type `AnyHashable`).  To cancel an in-flight effect send the `.cancel(id)` effect to the store.  
+**NOTE:** Assigning an identifier will also cancel any existing in-flight task with a **matching** identifier automatically.
+
+```swift
+func loadData() {
+    recieve(.task(operation: longRunningTask, id: "CancelTask"))
+}
+```
+
+```swift
+func loadData() {
+    recieve(.cancel("CancelTask"))
+}
+```
+<sub>Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.</sub>
 
 ### 3. Bindings
 
