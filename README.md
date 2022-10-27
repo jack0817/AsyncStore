@@ -152,7 +152,7 @@ func loadData() {
 
 #### 2.1 Effect Composition
 
-Becuase of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
+Because of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
 
 ```swift
 func initializeApp() {
@@ -187,7 +187,7 @@ func loadData() {
     recieve(.cancel("CancelTask"))
 }
 ```
-<sub>Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.</sub>
+**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.
 
 ### 3. Bindings
 
