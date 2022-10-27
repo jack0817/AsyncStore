@@ -1,6 +1,8 @@
 # AsyncStore
 
-*Coming Soon!*
+AsyncStores are first and foremost `ObservableObject`s so they can take advantage of all of SwiftUI's environment features including `@EnvironmentObject` and `@StateObject`. An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values and functions pertaining to the User of the app). The enviroment holds all dependencies needed by the Store including services, constants etc. 
+
+**NOTE:** AsyncStores are *not* intended to belong to a single view but rather to mutliple views and can be shared via SwiftUI's environment. 
 
 ## Table of Contents
 
@@ -8,14 +10,11 @@
    - 1.1 Anatomy of an AsyncStore
 2. Effects
    - 2.1 Effect Composition
+   - 2.2 Task Cancellation
 3. Bindings
 4. Single Source of Truth
 
 ### 1. Store
-
-AsyncStores are first and foremost `ObservableObject`s so they can take advantage of all of SwiftUI's environment features including `@EnvironmentObject` and `@StateObject`. An AsyncStore consists of 2 components, State and Environment. State represents the current state of the data domain represented by the Store (i.e. A UserStore's state would house all values and functions pertaining to the User of the app). The enviroment holds all dependencies needed by the Store including services, constants etc. 
-
-*NOTE:* AsyncStores are not intended to belong to a single view but rather to mutliple views and can be shared via SwiftUI's environment. 
 
 #### 1.1 Anatomy of an AsyncStore
 
@@ -131,30 +130,32 @@ fileprivate extension UserStore {
 ### 2. Effects
 
 Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
+Effects can be sent to an AsyncStore via the `receive` func
 
-- none
-  - Results in a no-op.  Essentially a void operation
-- set
-  - Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores
-- task
-  - Executes an asynchronous task, Operations must be `async throws -> Effect`
-- sleep
-  - Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time.  
-- timer
-  - Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed).
-- cancel
-  - Cancels any in-flight task, stream or binding for the specified Idientifier
-- merge
-  - Reduces all effects in no particular order
-- concatenate
-  - Reduces all effects in sequential order
+```swift
+func loadData() {
+    receive(.task(loadDataTask))
+}
+```
+
+
+| Effect | Description |
+| --- | --- |
+| `none` | Results in a no-op.  Essentially a void operation |
+| `set` | Perform a State mutation on the Main queue.  This will trigger views to render which have property wrappers to AsyncStores |
+| `task` | Executes an asynchronous task, Operations must be `async throws -> Effect` |
+| `sleep` | Performs a sleep for the specified time. Sleep intervals are not guaranteed to be Exact, but will sleep for *at least* this amount of time. |
+| `timer` | Creates an Asynchronous timer that will execute an effect at the specified interval (again, exactness is not guaranteed). |
+| `cancel` | Cancels any in-flight task, stream or binding for the specified Idientifier |
+| `merge` | Reduces all effects in no particular order |
+| `concatenate` | Reduces all effects in sequential order |
 
 #### 2.1 Effect Composition
 
-Becuase of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
+Because of the recursive nature of Effects, they can be composed via the `merge` and `concatenate` effects.
 
 ```swift
-func initializedAppe() {
+func initializeApp() {
     receive(
         .concatenate(
             .set(\.isLoading, to: true),
@@ -169,6 +170,24 @@ func initializedAppe() {
     )
 }
 ```
+
+#### 2.2 Task Cancellation
+
+Task and Timer effects can be cancelled by assigning these effects identifiers (of type `AnyHashable`).  To cancel an in-flight effect send the `.cancel(id)` effect to the store.  
+**NOTE:** Assigning an identifier will also cancel any existing in-flight task with a **matching** identifier automatically.
+
+```swift
+func loadData() {
+    recieve(.task(operation: longRunningTask, id: "CancelTask"))
+}
+```
+
+```swift
+func loadData() {
+    recieve(.cancel("CancelTask"))
+}
+```
+**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.
 
 ### 3. Bindings
 
