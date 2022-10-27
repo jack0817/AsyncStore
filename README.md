@@ -130,6 +130,11 @@ fileprivate extension UserStore {
 
 Effects are pre-defined actions for the AsyncStore.  Effects begat other effects and are reduced by the AsyncStore until it reaches a void-like effect (i.e. `.none` or a `.set`).
 
+| Command | Description |
+| --- | --- |
+| `git status` | List all *new or modified* files |
+| `git diff` | Show file differences that **haven't been** staged |
+
 - none
   - Results in a no-op.  Essentially a void operation
 - set
