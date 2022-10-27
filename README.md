@@ -6,13 +6,13 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
 
 ## Table of Contents
 
-1. Store
-   - 1.1 Anatomy of an AsyncStore
-2. Effects
-   - 2.1 Effect Composition
-   - 2.2 Task Cancellation
-3. Bindings
-4. Single Source of Truth
+1. [Store](#1-store)
+   - [1.1 Anatomy of an AsyncStore](#11-anatomy-of-an-asyncstore)
+2. [Effects](#2-effects)
+   - [2.1 Effect Composition](#21-effect-composition)
+   - [2.2 Task Cancellation](#22-task-cancellation)
+3. [Bindings](#3-bindings)
+4. [Single Source of Truth](#4-creating-a-single-source-of-truth)
 
 ### 1. Store
 
@@ -138,7 +138,6 @@ func loadData() {
 }
 ```
 
-
 | Effect | Description |
 | --- | --- |
 | `none` | Results in a no-op.  Essentially a void operation |
@@ -183,11 +182,11 @@ func loadData() {
 ```
 
 ```swift
-func loadData() {
+func cancelLoad() {
     recieve(.cancel("CancelTask"))
 }
 ```
-**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.
+**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
 
 ### 3. Bindings
 
