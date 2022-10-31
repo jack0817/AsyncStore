@@ -131,7 +131,7 @@ extension AsyncStore {
                 let effect = await execute(operation)
                 await reduce(effect)
             }
-            cancelStore.store(id, cancel: task.cancel)
+            cancelStore.store(id, task: task)
             guard awaitTask else { return }
             await task.value
         case .sleep(let time):
@@ -144,12 +144,12 @@ extension AsyncStore {
         case .timer(let interval, let id, let mapEffect):
             let timer = AsyncTimer(interval: interval)
             let timerTask = Task {
-                for try await date in timer {
+                for await date in timer {
                     let effect = mapEffect(date)
                     await reduce(effect)
                 }
             }
-            cancelStore.store(id, cancel: timerTask.cancel)
+            cancelStore.store(id, task: timerTask)
         case .debounce(let operation, let id, let delay):
             let parentTask: Task<Task<Void, Never>, Never> = Task {
                 Task {
@@ -161,7 +161,7 @@ extension AsyncStore {
                 }
             }
             let debounceTask = await parentTask.value
-            cancelStore.store(id, cancel: debounceTask.cancel)
+            cancelStore.store(id, task: debounceTask)
             guard awaitTask else { return }
             await debounceTask.value
         case .cancel(let id):
@@ -257,7 +257,7 @@ public extension AsyncStore {
             .map(mapEffect)
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        cancelStore.store(id, task: bindTask)
     }
     
     func bind<Value, Stream: AsyncSequence>(
@@ -271,7 +271,7 @@ public extension AsyncStore {
             .map(mapEffect)
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        cancelStore.store(id, task: bindTask)
     }
     
     func bind<UState, UEnv, Value>(
@@ -287,7 +287,7 @@ public extension AsyncStore {
             .map(mapEffect)
         
         let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, cancel: bindTask.cancel)
+        cancelStore.store(id, task: bindTask)
     }
 }
 
