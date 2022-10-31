@@ -30,25 +30,7 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         self._state = state
         self._env = env
         self._mapError = mapError
-        
-        self.stateChangedSubscription = stateChangedSubject
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-        
-        let stream = AsyncStream<Effect>(
-            Effect.self,
-            bufferingPolicy: .unbounded
-        ) { continuation in
-            self.receiveContinuation = continuation
-        }
-        
-        self.receiveTask = Task {
-            for await effect in stream {
-                await reduce(effect)
-            }
-        }
+        activate()
     }
     
     deinit {
@@ -69,6 +51,37 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     
     public subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
         get { _state[keyPath: dynamicMember] }
+    }
+    
+    public func activate() {
+        self.stateChangedSubscription?.cancel()
+        self.stateChangedSubscription = stateChangedSubject
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+        
+        self.receiveContinuation?.finish()
+        let stream = AsyncStream<Effect>(
+            Effect.self,
+            bufferingPolicy: .unbounded
+        ) { continuation in
+            self.receiveContinuation = continuation
+        }
+        
+        self.receiveTask?.cancel()
+        self.receiveTask = Task {
+            for await effect in stream {
+                await reduce(effect)
+            }
+        }
+    }
+    
+    public func deactivate() {
+        receiveTask?.cancel()
+        stateDistributor.finishAll()
+        cancelStore.cancellAll()
+        AsyncStoreLog.debug("[\(type(of: self))] deactivated")
     }
     
     public func receive(_ effect: Effect) {
