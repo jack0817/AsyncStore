@@ -209,7 +209,7 @@ extension UserStore {
         // MARK: Bind to AsyncSequence
         bind(
             id: "UserStore.HealthKitService", 
-            stream: map.healthKitService().stream()
+            stream: env.healthKitService().stream()
                 .debounce(for: 2.0), 
             mapEffect: mapHealthKitEventToEffect
         )
