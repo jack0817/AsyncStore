@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import Atomics
 
 // MARK: Store
 
@@ -24,13 +25,14 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     
     private let stateChangedSubject = PassthroughSubject<Void, Never>()
     private var stateChangedSubscription: AnyCancellable? = .none
+    private let _isActive = ManagedAtomic<Bool>(false)
     private var logTag: String { "[\(type(of: self))]" }
     
     public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
         self._state = state
         self._env = env
         self._mapError = mapError
-        activate()
+        self.activate()
     }
     
     deinit {
@@ -39,6 +41,10 @@ public final class AsyncStore<State, Environment>: ObservableObject {
         receiveTask?.cancel()
         stateDistributor.finishAll()
         cancelStore.cancellAll()
+    }
+    
+    public var isActive: Bool {
+        _isActive.load(ordering: .sequentiallyConsistent)
     }
     
     public var state: State {
@@ -54,14 +60,14 @@ public final class AsyncStore<State, Environment>: ObservableObject {
     }
     
     public func activate() {
-        self.stateChangedSubscription?.cancel()
-        self.stateChangedSubscription = stateChangedSubject
+        stateChangedSubscription?.cancel()
+        stateChangedSubscription = stateChangedSubject
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
         
-        self.receiveContinuation?.finish()
+        receiveContinuation?.finish()
         let stream = AsyncStream<Effect>(
             Effect.self,
             bufferingPolicy: .unbounded
@@ -69,30 +75,38 @@ public final class AsyncStore<State, Environment>: ObservableObject {
             self.receiveContinuation = continuation
         }
         
-        self.receiveTask?.cancel()
-        self.receiveTask = Task {
+        receiveTask?.cancel()
+        receiveTask = Task {
             for await effect in stream {
                 await reduce(effect)
             }
         }
+        
+        setIsActive(to: true)
     }
     
     public func deactivate() {
         receiveTask?.cancel()
         stateDistributor.finishAll()
         cancelStore.cancellAll()
-        AsyncStoreLog.debug("[\(type(of: self))] deactivated")
+        setIsActive(to: false)
+        AsyncStoreLog.debug("\(logTag) deactivated")
     }
     
     public func receive(_ effect: Effect) {
-        checkMainThread("\(logTag) 'receive' should only be called on from the main thread")
+        guard _isActive.load(ordering: .sequentiallyConsistent) else {
+            AsyncStoreLog.warning("\(logTag) is deactivated")
+            return
+        }
+        
+        checkMainThread("\(logTag) 'receive' should only be called from the main thread")
 
         let result = receiveContinuation?.yield(effect)
         switch result {
         case .dropped(let effect):
-            AsyncStoreLog.warning("[\(type(of: self))] dropped received effect \(effect)")
+            AsyncStoreLog.warning("\(logTag) dropped received effect \(effect)")
         case .terminated:
-            AsyncStoreLog.warning("[\(type(of: self))] stream terminated")
+            AsyncStoreLog.warning("\(logTag) stream terminated")
         default:
             break
         }
@@ -204,8 +218,8 @@ extension AsyncStore {
 
 // MARK: Private API
 
-extension AsyncStore {
-    private func execute(_ operation: () async throws -> Effect) async -> Effect {
+fileprivate extension AsyncStore {
+    func execute(_ operation: () async throws -> Effect) async -> Effect {
         do {
             return try await operation()
         } catch let error {
@@ -213,21 +227,21 @@ extension AsyncStore {
         }
     }
     
-    @MainActor private func setOnMain(_ setter: @escaping (inout State) -> Void) async {
+    @MainActor func setOnMain(_ setter: @escaping (inout State) -> Void) async {
         objectWillChange(setter)
     }
     
-    private func objectWillChange(_ setter: @escaping (inout State) -> Void) {
+    func objectWillChange(_ setter: @escaping (inout State) -> Void) {
         stateChangedSubject.send()
         setter(&_state)
         stateDistributor.yield(_state)
     }
     
-    private func downstream(for id: AnyHashable) -> AsyncStream<State> {
+    func downstream(for id: AnyHashable) -> AsyncStream<State> {
         stateDistributor.stream(for: id, initialValue: _state, bufferingPolicy: .unbounded)
     }
     
-    private func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
+    func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
         Task {
             do {
                 for try await effect in effectStream {
@@ -240,17 +254,30 @@ extension AsyncStore {
         }
     }
     
-    private func checkMainThread(_ warningMessage: String) {
+    func checkMainThread(_ warningMessage: String) {
         guard !Thread.current.isMainThread else { return }
         AsyncStoreLog.warning(warningMessage)
     }
     
-    private func processWarnings(for effect: Effect) {
+    func processWarnings(for effect: Effect) {
         switch effect {
         case .concatenate(let effects) where effects.contains(where: { $0.isDebounce }):
-            AsyncStoreLog.warning("[\(type(of: self))] Concatenated debounce effects may not be debounced as they will be synchronized.")
+            AsyncStoreLog.warning("\(logTag) Concatenated debounce effects may not be debounced as they will be synchronized.")
         default:
             break
+        }
+    }
+    
+    func setIsActive(to isActive: Bool) {
+        let currentValue = _isActive.load(ordering: .sequentiallyConsistent)
+        guard currentValue != isActive else { return }
+        var isExchanged = false
+        while !isExchanged {
+            isExchanged = _isActive.compareExchange(
+                expected: currentValue,
+                desired: isActive,
+                ordering: .sequentiallyConsistent
+            ).exchanged
         }
     }
 }

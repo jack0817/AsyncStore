@@ -21,7 +21,7 @@ public struct AsyncStoreLog {
         Self.level = level
     }
     
-    public static func setOutput(_ output: @escaping (String) -> Void) {
+    public static func setOutput(_ output: ((String) -> Void)?) {
         Self.output = output
     }
     

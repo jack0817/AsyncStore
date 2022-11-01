@@ -583,4 +583,30 @@ extension AsyncStoreTests {
         await waiter.wait(timeout: 5.0)
         XCTAssertEqual(store.ints, expectedValue)
     }
+    
+    func testDeactivation() async {
+        let expectedState = "Unchanged"
+        let expectedLog = "deactivated"
+        
+        let testStore = AsyncStore<String, String>(
+            state: expectedState,
+            env: "",
+            mapError: { _ in .none }
+        )
+        
+        var actualLogs: [String] = []
+        AsyncStoreLog.setOutput { log in
+            actualLogs.append(log)
+        }
+        
+        testStore.deactivate()
+        testStore.receive(.set(\.self, to: "Changed"))
+        
+        XCTAssertFalse(testStore.isActive)
+        XCTAssertTrue(testStore.state == expectedState)
+        XCTAssertTrue(actualLogs.count > 0)
+        XCTAssertTrue(actualLogs.contains(where: { $0.contains(expectedLog) }))
+        
+        AsyncStoreLog.setOutput(.none)
+    }
 }
