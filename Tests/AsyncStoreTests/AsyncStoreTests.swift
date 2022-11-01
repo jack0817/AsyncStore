@@ -437,7 +437,7 @@ final class AsyncStoreTests: XCTestCase {
     
     func testReceiveOffMainThread() async {
         var actualMessages: [String] = []
-        let expectedMessage = "'receive' should only be called on from the main thread"
+        let expectedMessage = "'receive' should only be called from the main thread"
         
         AsyncStoreLog.setLevel(.warning)
         AsyncStoreLog.setOutput {
