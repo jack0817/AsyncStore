@@ -14,7 +14,7 @@ import Atomics
 
 @dynamicMemberLookup
 public final class AsyncStore<State, Environment>: ObservableObject {
-    private var _state: State
+    fileprivate var _state: State
     private let _env: Environment
     private let _mapError: (Error) -> Effect
     
@@ -321,6 +321,19 @@ public extension AsyncStore {
 }
 
 // MARK: Effect Extensions
+
+public extension AsyncStore {
+    func map<OtherState, OtherEnv>(_ effect: Effect) -> AsyncStore<OtherState, OtherEnv>.Effect {
+        return .task(
+            operation: { [weak self] in
+                guard let self = self else { return .none }
+                await self.reduce(effect)
+                return .none
+            },
+            id: .none
+        )
+    }
+}
 
 private extension AsyncStore.Effect {
     var isDebounce: Bool {
