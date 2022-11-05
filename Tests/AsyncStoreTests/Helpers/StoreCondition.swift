@@ -28,6 +28,14 @@ final class StoreCondition<State: Equatable, Environment> {
         self.condition = condition
     }
     
+    convenience init<Value: Equatable>(
+        _ store: AsyncStore<State, Environment>,
+        _ property: KeyPath<State, Value>,
+        equals value: Value
+    ) {
+        self.init(store: store, condition: { $0[keyPath: property] == value })
+    }
+    
     func wait(for timeout: TimeInterval) async {
         guard !condition(store.state) else { return }
         
