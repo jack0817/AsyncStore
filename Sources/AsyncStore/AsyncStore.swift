@@ -324,14 +324,11 @@ public extension AsyncStore {
 
 public extension AsyncStore {
     func map<OtherState, OtherEnv>(_ effect: Effect) -> AsyncStore<OtherState, OtherEnv>.Effect {
-        return .task(
-            operation: { [weak self] in
-                guard let self = self else { return .none }
-                await self.reduce(effect)
-                return .none
-            },
-            id: .none
-        )
+        .task { [weak self] in
+            guard let self = self else { return .none }
+            await self.reduce(effect)
+            return .none
+        }
     }
 }
 
