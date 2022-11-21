@@ -13,6 +13,7 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
    - [2.2 Task Cancellation](#22-task-cancellation)
 3. [Bindings](#3-bindings)
 4. [Single Source of Truth](#4-creating-a-single-source-of-truth)
+5. [Memory Management](#5-memory-management)
 
 ### 1. Store
 
@@ -271,3 +272,24 @@ struct MyApp: App {
     }
 }
 ```
+
+### 5. Memory Management
+
+AsyncStore can do a massive amount of Task tracking.  Becuase of this it may become necessary to clean up resources for large AsyncStores that are no longer being used.  To do this simply call the `deactivate` func. Calling `recieve` on a deactivated store will result in a no-op.  To reactivate a store, call `activate`. By default, AsyncStores call `activate` on init.
+
+**NOTE:** Re-activating an AsyncStore *WILL NOT* recreate its previous bindings.  Such bindings will need to be re-instantiated.
+
+```swift
+@main
+struct ContentView: View {
+    @StateObject private var transientStore = TransientStore()
+    
+    var body: some View {
+        VStack {
+            Text("Transient Stores")
+        }
+        .onDisappear {
+            transientStore.deactivate()
+        }
+    }
+}
