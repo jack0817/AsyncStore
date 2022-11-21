@@ -277,19 +277,19 @@ struct MyApp: App {
 
 AsyncStore can do a massive amount of Task tracking.  Becuase of this it may become necessary to clean up resources for large AsyncStores that are no longer being used.  To do this simply call the `deactivate` func. Calling `recieve` on a deactivated store will result in a no-op.  To reactivate a store, call `activate`. By default, AsyncStores call `activate` on init.
 
-**NOTE:** Re-activating an AsyncStore *WILL NOT* recreate its previous bindings.  Such bindings will need to be re-instantiated after deactivation.
+**NOTE:** Re-activating an AsyncStore *WILL NOT* recreate its previous bindings.  Such bindings will need to be re-instantiated.
 
 ```swift
 @main
 struct ContentView: View {
-    @StateObject private var myStore = MyStore()
+    @StateObject private var transientStore = TransientStore()
     
     var body: some View {
         VStack {
             Text("Transient Stores")
         }
         .onDisappear {
-            myStore.deactivate()
+            transientStore.deactivate()
         }
     }
 }
