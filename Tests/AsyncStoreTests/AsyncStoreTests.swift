@@ -13,6 +13,7 @@ final class AsyncStoreTests: XCTestCase {
         var value = ""
         var ints: [Int] = []
         var dates: [Date] = []
+        var isCompleted = false
     }
     
     struct TestEnvironment: Equatable {
@@ -65,13 +66,14 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
-        
         let expectedValue = "New Value"
+        let condition = AsyncStoreCondition(store)
+        
         store.receive(.set { $0.value = expectedValue })
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.value, toEqual: expectedValue, timeout: 5.0)
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.value, expectedValue)
     }
     
@@ -90,11 +92,17 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
         
-        store.receive(.task(operation))
+        store.receive(
+            .concatenate(
+                .task(operation),
+                .set(\.isCompleted, to: true)
+            )
+        )
         
-        await waiter.wait(timeout: 5.0)
+        let waitState = await condition.wait(for: \.isCompleted, toEqual: true, timeout: 5.0)
+        XCTAssertEqual(waitState, .completed)
         XCTAssertEqual(count, expectedCount)
         XCTAssertEqual(store.value, expectedValue)
     }
@@ -117,7 +125,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
         
         for i in 0 ..< thrashCount {
             store.receive(
@@ -129,8 +137,9 @@ final class AsyncStoreTests: XCTestCase {
             )
         }
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(cancelCount, thrashCount - 1)
         XCTAssertEqual(store.ints.count, 1)
         XCTAssertEqual(store.ints[0], thrashCount - 1)
@@ -152,7 +161,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
         
         store.receive(
             .concatenate(
@@ -164,8 +173,9 @@ final class AsyncStoreTests: XCTestCase {
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertTrue(actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
     
@@ -187,7 +197,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
         
         for i in 0 ..< thrashCount {
             store.receive(
@@ -199,15 +209,16 @@ final class AsyncStoreTests: XCTestCase {
             )
         }
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(cancelCount, thrashCount - 1)
         XCTAssertEqual(store.ints.count, 1)
         XCTAssertEqual(store.ints[0], thrashCount - 1)
     }
     
     func testTimerEffect() async throws {
-        let expectedDatesCount = 2
+        let expectedDatesCount = 3
         let expectedValue = "TimerStarted"
         
         let store = TestStore(
@@ -216,7 +227,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 3)
+        let condition = AsyncStoreCondition(store)
         
         store.receive(
             .concatenate(
@@ -224,19 +235,19 @@ final class AsyncStoreTests: XCTestCase {
                     0.1,
                     id: "Timer",
                     mapEffect: { tick in
-                        return .set { $0.dates.append(tick) }
+                        .set { $0.dates.append(tick) }
                     }
                 ),
                 .set(\.value, to: expectedValue)
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.dates.count, toEqual: 3, timeout: 5.0)
         store.receive(.cancel("Timer"))
         try? await Task.trySleep(for: 0.25)
         
-        let actualDatesCount = store.dates.count
-        XCTAssertEqual(actualDatesCount, expectedDatesCount)
+        XCTAssertEqual(waitStatus, .completed)
+        XCTAssertEqual(store.dates.count, expectedDatesCount)
         XCTAssertEqual(store.value, expectedValue)
     }
     
@@ -258,7 +269,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let condition = AsyncStoreCondition(store)
         
         store.receive(
             .merge(
@@ -267,7 +278,9 @@ final class AsyncStoreTests: XCTestCase {
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 2, timeout: 5.0)
+        
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.ints, expectedInts)
     }
     
@@ -288,7 +301,7 @@ final class AsyncStoreTests: XCTestCase {
             mapError: { _ in .none }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let condition = AsyncStoreCondition(store)
         
         store.receive(
             .concatenate(
@@ -297,7 +310,9 @@ final class AsyncStoreTests: XCTestCase {
             )
         )
         
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 2, timeout: 5.0)
+        
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.ints, expectedInts)
     }
     
@@ -307,7 +322,7 @@ final class AsyncStoreTests: XCTestCase {
         var cancelError: Error? = .none
         
         let dataOperation: (Int) async throws -> TestStore.Effect = { value in
-            try await Task.trySleep(for: 0.5)
+            try await Task.trySleep(for: 0.25)
             return .set { $0.ints.append(value) }
         }
 
@@ -320,14 +335,15 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
 
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
 
         store.receive(.dataTask(1, dataOperation, taskId))
         try? await Task.trySleep(for: 0.1)
         store.receive(.dataTask(2, dataOperation, taskId))
 
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.ints, expectedInts)
         XCTAssertNotNil(cancelError)
         XCTAssertTrue(cancelError is CancellationError)
@@ -342,7 +358,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let condition = AsyncStoreCondition(store)
         
         store.bind(
             id: "asyncBind",
@@ -353,7 +369,9 @@ final class AsyncStoreTests: XCTestCase {
         )
         
         store.receive(.set({ $0.ints = [1, 2] }))
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.value.isEmpty, toEqual: false, timeout: 5.0)
+        
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.value, "12")
     }
     
@@ -375,7 +393,7 @@ final class AsyncStoreTests: XCTestCase {
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 2)
+        let condition = AsyncStoreCondition(store)
         
         store.bind(
             id: "Stream",
@@ -389,7 +407,7 @@ final class AsyncStoreTests: XCTestCase {
         
         continuation.yield(expectedDate1)
         continuation.yield(expectedDate2)
-        await waiter.wait(timeout: 5.0)
+        let waitStatus = await condition.wait(for: \.dates.count, toEqual: 2, timeout: 5.0)
         
         store.receive(.cancel("Stream"))
         try? await Task.trySleep(for: 0.5)
@@ -397,6 +415,7 @@ final class AsyncStoreTests: XCTestCase {
         continuation.yield(expectedDate3)
         continuation.finish()
         
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.dates.count, 2)
         XCTAssertEqual(store.dates.first, expectedDate1)
         XCTAssertEqual(store.dates.last, expectedDate2)
@@ -429,9 +448,13 @@ final class AsyncStoreTests: XCTestCase {
             mapEffect: { parentValue in .set { $0.value = parentValue } }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
+        let condition = AsyncStoreCondition(store)
+
         parentStore.receive(.set({ $0.value = exptectedValue }))
-        await waiter.wait(timeout: 5.0)
+        
+        let waitStatus = await condition.wait(for: \.value.isEmpty, toEqual: false, timeout: 5.0)
+        
+        XCTAssertEqual(waitStatus, .completed)
         XCTAssertEqual(store.value, exptectedValue)
     }
     
@@ -496,92 +519,49 @@ final class AsyncStoreTests: XCTestCase {
         
         XCTAssertTrue(!actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
-}
-
-// MARK: Sequence Effect Tests
-
-extension AsyncStoreTests {
-    func testAppend() async {
-        let expectedValue = [1]
-        let store = TestStore(
-            state: .init(),
-            env: .init(),
-            mapError: { _ in
-                return .none
-            }
-        )
-        
-        let waiter = StoreWaiter(store: store, count: 1)
-        store.receive(.append(expectedValue[0], to: \.ints))
-        await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.ints, expectedValue)
-    }
     
-    func testInsert() async {
-        let expectedValue = [1]
-        let store = TestStore(
-            state: .init(),
-            env: .init(),
-            mapError: { _ in
+    func testRemoveDuplicates() async {
+        struct SourceState: Equatable {
+            var value = 0
+            var isCompleted = false
+        }
+        
+        let sourceStore = AsyncStore<SourceState, String>(state: .init(), env: "", mapError: { _ in .none })
+        let destStore = AsyncStore<Int, String>(state: 0, env: "", mapError: { _ in .none })
+        
+        var actualValues: [Int] = []
+        let expectedValues: [Int] = [0, 1, 2, 3]
+        
+        destStore.bind(
+            id: "DestStore",
+            to: sourceStore,
+            on: \.value,
+            mapEffect: { value in
+                actualValues.append(value)
                 return .none
             }
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
-        store.receive(.insert(expectedValue[0], at: 0, to: \.ints))
-        await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.ints, expectedValue)
-    }
-    
-    func testRemove() async {
-        let expectedValue = [1]
-        let state = TestState(value: "", ints: [1, 2], dates: [])
-        let store = TestStore(
-            state: state,
-            env: .init(),
-            mapError: { _ in
-                return .none
-            }
+        sourceStore.receive(
+            .concatenate(
+                .set(\.value, to: 1),
+                .set(\.value, to: 1),
+                .set(\.value, to: 2),
+                .set(\.value, to: 2),
+                .set(\.value, to: 3),
+                .set(\.value, to: 3),
+                .set(\.isCompleted, to: true)
+            )
         )
         
-        let waiter = StoreWaiter(store: store, count: 1)
-        store.receive(.remove(at: 1, from: \.ints))
-        await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.ints, expectedValue)
-    }
-    
-    func testRemoveFirst() async {
-        let expectedValue = [1]
-        let state = TestState(value: "", ints: [2, 1], dates: [])
-        let store = TestStore(
-            state: state,
-            env: .init(),
-            mapError: { _ in
-                return .none
-            }
-        )
+        let condition = AsyncStoreCondition(sourceStore)
+        let waitStatus = await condition.wait(for: \.isCompleted, toEqual: true, timeout: 5.0)
         
-        let waiter = StoreWaiter(store: store, count: 1)
-        store.receive(.removeFirst(from: \.ints))
-        await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.ints, expectedValue)
-    }
-    
-    func testRemoveLast() async {
-        let expectedValue = [1]
-        let state = TestState(value: "", ints: [1, 2], dates: [])
-        let store = TestStore(
-            state: state,
-            env: .init(),
-            mapError: { _ in
-                return .none
-            }
-        )
+        sourceStore.deactivate()
+        destStore.deactivate()
         
-        let waiter = StoreWaiter(store: store, count: 1)
-        store.receive(.removeLast(from: \.ints))
-        await waiter.wait(timeout: 5.0)
-        XCTAssertEqual(store.ints, expectedValue)
+        XCTAssertEqual(waitStatus, .completed)
+        XCTAssertEqual(actualValues, expectedValues)
     }
     
     func testDeactivation() async {
@@ -608,5 +588,93 @@ extension AsyncStoreTests {
         XCTAssertTrue(actualLogs.contains(where: { $0.contains(expectedLog) }))
         
         AsyncStoreLog.setOutput(.none)
+    }
+}
+
+// MARK: Sequence Effect Tests
+
+extension AsyncStoreTests {
+    func testAppend() async {
+        let expectedValue = [1]
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let condition = AsyncStoreCondition(store)
+        store.receive(.append(expectedValue[0], to: \.ints))
+        await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testInsert() async {
+        let expectedValue = [1]
+        let store = TestStore(
+            state: .init(),
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let condition = AsyncStoreCondition(store)
+        store.receive(.insert(expectedValue[0], at: 0, to: \.ints))
+        await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemove() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [1, 2], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let condition = AsyncStoreCondition(store)
+        store.receive(.remove(at: 1, from: \.ints))
+        await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemoveFirst() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [2, 1], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let condition = AsyncStoreCondition(store)
+        store.receive(.removeFirst(from: \.ints))
+        await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
+        XCTAssertEqual(store.ints, expectedValue)
+    }
+    
+    func testRemoveLast() async {
+        let expectedValue = [1]
+        let state = TestState(value: "", ints: [1, 2], dates: [])
+        let store = TestStore(
+            state: state,
+            env: .init(),
+            mapError: { _ in
+                return .none
+            }
+        )
+        
+        let condition = AsyncStoreCondition(store)
+        store.receive(.removeLast(from: \.ints))
+        await condition.wait(for: \.ints.count, toEqual: 1, timeout: 5.0)
+        store.deactivate()
+        XCTAssertEqual(store.ints, expectedValue)
     }
 }

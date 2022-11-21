@@ -14,7 +14,7 @@ import Atomics
 
 @dynamicMemberLookup
 public final class AsyncStore<State, Environment>: ObservableObject {
-    private var _state: State
+    fileprivate var _state: State
     private let _env: Environment
     private let _mapError: (Error) -> Effect
     
@@ -241,19 +241,6 @@ fileprivate extension AsyncStore {
         stateDistributor.stream(for: id, initialValue: _state, bufferingPolicy: .unbounded)
     }
     
-    func bindTask(for effectStream: AnyAsyncSequence<Effect>) -> Task<Void, Never> {
-        Task {
-            do {
-                for try await effect in effectStream {
-                    await reduce(effect)
-                }
-            } catch let error {
-                let effect = _mapError(error)
-                await reduce(effect)
-            }
-        }
-    }
-    
     func checkMainThread(_ warningMessage: String) {
         guard !Thread.current.isMainThread else { return }
         AsyncStoreLog.warning(warningMessage)
@@ -290,28 +277,10 @@ public extension AsyncStore {
         to keyPath: KeyPath<State, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
-        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
-        let effectStream = downstream(for: id)
+        let stream = downstream(for: id)
             .map { $0[keyPath: keyPath] }
-            .removeDuplicates()
-            .map(mapEffect)
         
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, task: bindTask)
-    }
-    
-    func bind<Value, Stream: AsyncSequence>(
-        id: AnyHashable,
-        to stream: Stream,
-        mapEffect: @escaping (Value) -> Effect
-    ) where Value: Equatable, Stream.Element == Value{
-        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
-        let effectStream = stream
-            .removeDuplicates()
-            .map(mapEffect)
-        
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
-        cancelStore.store(id, task: bindTask)
+        bind(id: id, to: stream, mapEffect: mapEffect)
     }
     
     func bind<UState, UEnv, Value>(
@@ -320,18 +289,48 @@ public extension AsyncStore {
         on keyPath: KeyPath<UState, Value>,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable {
-        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
-        let effectStream = upstreamStore.downstream(for: id)
+        let stream = upstreamStore
+            .downstream(for: id)
             .map { $0[keyPath: keyPath] }
-            .removeDuplicates()
-            .map(mapEffect)
         
-        let bindTask = bindTask(for: effectStream.eraseToAnyAsyncSequence())
+        bind(id: id, to: stream, mapEffect: mapEffect)
+    }
+    
+    func bind<Value, Stream: AsyncSequence>(
+        id: AnyHashable,
+        to stream: Stream,
+        mapEffect: @escaping (Value) -> Effect
+    ) where Value: Equatable, Stream.Element == Value{
+        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
+        let effectStream = stream.removeDuplicates()
+        
+        let bindTask = Task {
+            do {
+                for try await value in effectStream {
+                    let effect = mapEffect(value)
+                    await reduce(effect)
+                }
+            } catch let error {
+                let effect = _mapError(error)
+                await reduce(effect)
+            }
+        }
+        
         cancelStore.store(id, task: bindTask)
     }
 }
 
 // MARK: Effect Extensions
+
+public extension AsyncStore {
+    func map<OtherState, OtherEnv>(_ effect: Effect) -> AsyncStore<OtherState, OtherEnv>.Effect {
+        .task { [weak self] in
+            guard let self = self else { return .none }
+            await self.reduce(effect)
+            return .none
+        }
+    }
+}
 
 private extension AsyncStore.Effect {
     var isDebounce: Bool {
