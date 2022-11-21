@@ -30,13 +30,13 @@ public final class AsyncStoreCondition<State, Environment> {
         toEqual value: Value,
         timeout: TimeInterval
     ) async -> WaitState {
-        await wait(for: property, toEqual: { $0 == value }, timeout: timeout)
+        await wait(for: property, toSatisfy: { $0 == value }, timeout: timeout)
     }
     
     @discardableResult
     public func wait<Value: Equatable>(
         for property: KeyPath<State, Value>,
-        toEqual condition: @escaping (Value) -> Bool,
+        toSatisfy condition: @escaping (Value) -> Bool,
         timeout: TimeInterval
     ) async -> WaitState {
         let stream = store.stream(for: "\(type(of: self)).\(self)", at: property)
