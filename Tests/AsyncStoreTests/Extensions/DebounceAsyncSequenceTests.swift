@@ -43,15 +43,15 @@ final class DebounceAsyncSequenceTests: XCTestCase {
         
         let thrashRange = 0 ... 100
         
-        let condition1 = StoreCondition(store: sourceStore, condition: { $0 == "\(thrashRange.upperBound)" })
-        let condition2 = StoreCondition(store: countStore, condition: { $0.count == 1 })
+        let condition1 = AsyncStoreCondition(sourceStore)
+        let condition2 = AsyncStoreCondition(countStore)
         
         for thrash in thrashRange {
             sourceStore.receive(.set(\.self, to: "\(thrash)"))
         }
         
-        await condition1.wait(for: 5.0)
-        await condition2.wait(for: 5.0)
+        await condition1.wait(for: \.self, toEqual: "\(thrashRange.upperBound)", timeout: 5.0)
+        await condition2.wait(for: \.count, toEqual: 1, timeout: 5.0)
         countStore.receive(.cancel("CountStore.SourceStore"))
         
         XCTAssertEqual(sourceStore.state, "\(thrashRange.upperBound)")
