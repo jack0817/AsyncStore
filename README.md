@@ -13,7 +13,7 @@ AsyncStores are first and foremost `ObservableObject`s so they can take advantag
    - [2.2 Task Cancellation](#22-task-cancellation)
 3. [Bindings](#3-bindings)
 4. [Single Source of Truth](#4-creating-a-single-source-of-truth)
-5: [Memory Management](#5-memory-management)
+5. [Memory Management](#5-memory-management)
 
 ### 1. Store
 
