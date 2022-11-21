@@ -20,7 +20,7 @@ public final class AsyncStoreCondition<State, Environment> {
     private var conditionTask: Task<Void, Never>? = .none
     private var timeoutTask: Task<Void, Never>? = .none
     
-    init(_ store: AsyncStore<State, Environment>) {
+    public init(_ store: AsyncStore<State, Environment>) {
         self.store = store
     }
     
