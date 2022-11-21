@@ -301,6 +301,11 @@ public extension AsyncStore {
         to stream: Stream,
         mapEffect: @escaping (Value) -> Effect
     ) where Value: Equatable, Stream.Element == Value{
+        guard _isActive.load(ordering: .sequentiallyConsistent) else {
+            AsyncStoreLog.warning("\(logTag) is deactivated")
+            return
+        }
+        
         AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
         let effectStream = stream.removeDuplicates()
         
