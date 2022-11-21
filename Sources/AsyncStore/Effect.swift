@@ -22,8 +22,8 @@ public extension AsyncStore {
 }
 
 public extension AsyncStore.Effect {
-    static func set<Value>(_ keyPath: WritableKeyPath<State, Value>, to value: Value) -> Self {
-        return .set { $0[keyPath: keyPath] = value }
+    static func set<Value>(_ property: WritableKeyPath<State, Value>, to value: Value) -> Self {
+        return .set { $0[keyPath: property] = value }
     }
     
     static func task(
