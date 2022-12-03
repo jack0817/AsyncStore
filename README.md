@@ -197,7 +197,7 @@ func cancelLoad() {
     recieve(.cancel("CancelTask"))
 }
 ```
-**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
+**NOTE:** Cancelling an in-flight task will cause the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
 
 ### 3. Bindings
 
