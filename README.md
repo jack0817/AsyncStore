@@ -44,11 +44,13 @@ struct UserEnvironment {
 typealias UserStore = AsyncStore<UserState, UserEnvironment>
 
 extension UserStore {
-    convenience init(
-        _ state: UserState = .init(), 
-        env: .init(), 
-        mapError: ErrorHandler().mapError
-    )
+    convenience init(_ state: UserState = .init()) {
+        self.init(
+            state: state, 
+            env: .init(), 
+            mapError: ErrorHandler().mapError
+        )
+    }
 }
 
 // MARK: Public API
@@ -95,12 +97,20 @@ struct LoginView: View {
         .init(userName: userName, password: password)
     }
     
+    private var isLoggedIn: Bool {
+        userStore.user != .none
+    }
+    
     var body: some View {
         VStack {
             TextField("User Name", text: $userName)
             SecureField("Password", text: $password)
-            Button("Login", action: { userStore.login(credentials) })
-            Button("Logout", action: userStore.logout)
+            
+            if isLoggedIn {
+                Button("Logout", action: userStore.logout)
+            } else {
+                Button("Login", action: { userStore.login(credentials) })
+            }
             
             if let dialog = userStore.errorDialog {
                 Text(dialog.message)
@@ -187,7 +197,7 @@ func cancelLoad() {
     recieve(.cancel("CancelTask"))
 }
 ```
-**NOTE:** Cancelling an in-flight task will cuase the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
+**NOTE:** Cancelling an in-flight task will cause the task's operation to throw an error of type `CancellationError`. This error will be caught your `mapEffect` function so you can handle it as needed.  [see Error Handling](#Error-Handling)
 
 ### 3. Bindings
 
@@ -252,7 +262,7 @@ struct SSOT: ViewModifier {
     }
     
     func body(content: Content) -> some View {
-        content.
+        content
             .environmentObject(userStore)
             .environmentObject(appStore)
     }
@@ -280,7 +290,6 @@ AsyncStore can do a massive amount of Task tracking.  Becuase of this it may bec
 **NOTE:** Re-activating an AsyncStore *WILL NOT* recreate its previous bindings.  Such bindings will need to be re-instantiated.
 
 ```swift
-@main
 struct ContentView: View {
     @StateObject private var transientStore = TransientStore()
     
