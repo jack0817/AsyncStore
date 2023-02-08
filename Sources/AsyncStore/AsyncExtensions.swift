@@ -143,7 +143,7 @@ extension DebounceAsyncSequence {
     }
 }
 
-extension AsyncSequence {
+public extension AsyncSequence {
     func debounce(for timeInterval: TimeInterval) -> AnyAsyncSequence<Element> {
         return DebounceAsyncSequence(upstream: self, timeInterval: timeInterval)
             .eraseToAnyAsyncSequence()
