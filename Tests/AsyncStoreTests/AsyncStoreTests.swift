@@ -484,7 +484,7 @@ final class AsyncStoreTests: XCTestCase {
             expectation.fulfill()
         }
         
-        await waitForExpectations(timeout: 5.0)
+        await fulfillment(of: [expectation], timeout: 5.0)
         
         XCTAssertTrue(actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }
@@ -515,7 +515,7 @@ final class AsyncStoreTests: XCTestCase {
             expectation.fulfill()
         }
         
-        await waitForExpectations(timeout: 5.0)
+        await fulfillment(of: [expectation], timeout: 5.0)
         
         XCTAssertTrue(!actualMessages.contains(where: { $0.contains(expectedMessage) }))
     }

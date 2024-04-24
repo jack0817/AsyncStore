@@ -48,7 +48,7 @@ final class AsyncAtomicStore<Value> {
 // MARK: Atomic Operations
 
 fileprivate extension AsyncAtomicStore {
-    func perform<Value>(_ action: AsyncAtomicStore.Action, operation: () -> Value) -> Value {
+    func perform<T>(_ action: AsyncAtomicStore.Action, operation: () -> T) -> T {
         var exchanged = false
         while !exchanged {
             exchanged = currentAction.compareExchange(
