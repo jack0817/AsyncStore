@@ -1,6 +1,7 @@
 // swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
@@ -18,11 +19,24 @@ let package = Package(
             targets: ["AsyncStore"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-syntax", from: "509.0.0")
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "AsyncStore"
+            name: "AsyncStore",
+            dependencies: [
+                "AsyncStoreMacros"
+            ]
+        ),
+        .macro(
+            name: "AsyncStoreMacros",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
+            ]
         ),
         .testTarget(
             name: "AsyncStoreTests",
@@ -30,3 +44,4 @@ let package = Package(
         ),
     ]
 )
+
