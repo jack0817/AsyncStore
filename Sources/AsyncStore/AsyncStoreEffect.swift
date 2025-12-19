@@ -12,6 +12,8 @@ public extension AsyncStore {
         case none
         case set(@Sendable (inout State) -> Void)
         case task(AsyncTask, id: TaskIdentifier?)
+        case concatenate([Effect])
+        case merge([Effect])
     }
 }
 
@@ -37,6 +39,14 @@ public extension AsyncStore.Effect {
         id: TaskIdentifier? = .none
     ) -> Self {
         .task({ try await operation(param) }, id: id)
+    }
+    
+    static func concatenate(_ effects: Self ...) -> Self {
+        .concatenate(effects)
+    }
+    
+    static func merge(_ effects: Self ...) -> Self {
+        .merge(effects)
     }
 }
 

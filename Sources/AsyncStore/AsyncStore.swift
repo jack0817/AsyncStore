@@ -23,6 +23,9 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     
     @ObservationIgnored
     private var runContinuation: AsyncStream<Effect>.Continuation? = .none
+    
+    @ObservationIgnored
+    private var tasks: [TaskIdentifier: Task<Void, Never>] = [:]
 
     public init(state: State) {
         self.state = state
@@ -52,6 +55,10 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
 // MARK: Public API
 
 public extension AsyncStore {
+    func cancel(id: TaskIdentifier) {
+        tasks[id]?.cancel()
+    }
+
     func binding<Value: Equatable & Sendable>(
         on keyPath: WritableKeyPath<State, Value>
     ) -> Binding<Value> {
@@ -91,9 +98,27 @@ fileprivate extension AsyncStore {
             await execute(setter)
         case .task(let operation, let id):
             print("[AsyncStore] executing \(String(describing: id))")
-            Task {
+            let task = Task {
                 let effect = await perform(operation)
                 await run(effect)
+            }
+            
+            await track(task, for: id)
+            
+            guard awaitTask else { return }
+            await task.value
+        case .concatenate(let effects):
+            for effect in effects {
+                await reduce(effect, awaitTask: true)
+            }
+        case .merge(let effects):
+            await withTaskGroup { [weak self] group in
+                for effect in effects {
+                    guard let self else { break }
+                    group.addTask { await self.reduce(effect) }
+                }
+                
+                for await _ in group { }
             }
         }
     }
@@ -102,6 +127,11 @@ fileprivate extension AsyncStore {
 // MARK: Private API
 
 fileprivate extension AsyncStore {
+    func track(_ task: Task<Void, Never>, for id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id] = task
+    }
+
     func execute(_ setter: (inout State) -> Void) {
         setter(&state)
     }

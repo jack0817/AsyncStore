@@ -42,6 +42,10 @@ let package = Package(
             name: "AsyncStoreTests",
             dependencies: ["AsyncStore"]
         ),
+        .testTarget(
+            name: "AsyncStoreMacroTests",
+            dependencies: ["AsyncStore"]
+        ),
     ]
 )
 
