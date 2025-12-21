@@ -30,7 +30,7 @@ struct AsyncStoreEffectTests {
         let testStore = TestStore()
         let awaiter = StoreAwaiter(store: testStore)
         do {
-            try await awaiter.wait(for: \.integer, running: .none)
+            try await awaiter.wait(for: \.integer, running: .none, timeout: 1.0)
             #expect(Bool(false), "The store did not time out")
         } catch let error as StoreAwaiter<TestState, TestTaskIdentifier>.Error {
             #expect(error == .timedout)

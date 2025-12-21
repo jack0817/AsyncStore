@@ -29,7 +29,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     private var tasks: [TaskIdentifier: Task<Void, Never>] = [:]
     
     @ObservationIgnored
-    private var stateContinuations: [ObjectIdentifier: AsyncStream<State>.Continuation] = [:]
+    private var stateContinuations: [Int: AsyncStream<State>.Continuation] = [:]
 
     public init(state: State) {
         self.state = state
@@ -95,17 +95,15 @@ public extension AsyncStore {
         for property: KeyPath<State, Value>
     ) ->  AsyncRemoveDuplicatesSequence<AsyncMapSequence<AsyncStream<State>, Value>> {
         AsyncStream<State> { continuation in
-            let id = ObjectIdentifier(property)
-            stateContinuations[id] = continuation
+            stateContinuations[continuation.hashValue] = continuation
         }
         .map { $0[keyPath: property] }
         .removeDuplicates()
     }
     
-    func finishStream<Value: Equatable & Sendable>(for property: KeyPath<State, Value>) {
-        let id = ObjectIdentifier(property)
-        stateContinuations[id]?.finish()
-        stateContinuations[id] = .none
+    func finishAllStreams() {
+        stateContinuations.values.forEach { $0.finish() }
+        stateContinuations = [:]
     }
 }
 
@@ -170,10 +168,28 @@ fileprivate extension AsyncStore {
 
     func execute(_ setter: (inout State) -> Void) {
         setter(&state)
-        print("[\(type(of: self))] sending state")
-        stateContinuations.values.forEach { $0.yield(state) }
+        yieldState()
     }
     
+    func yieldState() {
+        var terminatedKeys: [Int] = []
+        
+        stateContinuations.values.forEach { continuation in
+            switch continuation.yield(state) {
+            case .terminated:
+                terminatedKeys.append(continuation.hashValue)
+            default:
+                break
+            }
+        }
+        
+        terminatedKeys.forEach {
+            stateContinuations[$0]?.finish()
+            stateContinuations[$0] = .none
+        }
+    }
+    
+    nonisolated
     func perform(_ operation: @escaping AsyncTask) async -> Effect {
         do {
             return try await operation()
