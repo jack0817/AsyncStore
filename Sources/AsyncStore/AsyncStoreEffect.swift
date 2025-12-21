@@ -27,6 +27,13 @@ public extension AsyncStore.Effect {
         .set { $0[keyPath: keyPath] = value }
     }
     
+    static func append<Element: Sendable>(
+        _ element: Element,
+        to array: WritableKeyPath<State, [Element]>
+    ) -> Self {
+        .set { $0[keyPath: array].append(element) }
+    }
+    
     static func task(
         _ operation : @Sendable @escaping () async throws -> Self
     ) -> Self {

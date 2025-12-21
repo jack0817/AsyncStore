@@ -5,6 +5,7 @@
 //  Created by Wendell Thompson on 12/15/25.
 //
 
+import AsyncAlgorithms
 import Foundation
 import SwiftUI
 
@@ -26,6 +27,9 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     
     @ObservationIgnored
     private var tasks: [TaskIdentifier: Task<Void, Never>] = [:]
+    
+    @ObservationIgnored
+    private var stateContinuations: [ObjectIdentifier: AsyncStream<State>.Continuation] = [:]
 
     public init(state: State) {
         self.state = state
@@ -36,6 +40,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         
         self.runEffectTask = Task(priority: .background) { [weak self] in
             for await effect in stream {
+                print("[\(type(of: self))] received effect \(effect)")
                 guard let self, !Task.isCancelled else { return }
                 await self.reduce(effect)
             }
@@ -45,6 +50,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     deinit {
         runContinuation?.finish()
         runEffectTask?.cancel()
+        stateContinuations.values.forEach { $0.finish() }
     }
 
     public subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
@@ -84,11 +90,35 @@ public extension AsyncStore {
     func store<Key: AsyncStoreEnvironmentKey>(for key: Key.Type) -> Key.Store {
         AsyncStoreEnvironmentValues.shared[key]
     }
+    
+    func stream<Value: Equatable & Sendable>(
+        for property: KeyPath<State, Value>
+    ) ->  AsyncRemoveDuplicatesSequence<AsyncMapSequence<AsyncStream<State>, Value>> {
+        AsyncStream<State> { continuation in
+            let id = ObjectIdentifier(property)
+            stateContinuations[id] = continuation
+        }
+        .map { $0[keyPath: property] }
+        .removeDuplicates()
+    }
+    
+    func finishStream<Value: Equatable & Sendable>(for property: KeyPath<State, Value>) {
+        let id = ObjectIdentifier(property)
+        stateContinuations[id]?.finish()
+        stateContinuations[id] = .none
+    }
 }
 
 // MARK: Private API
 
 fileprivate extension AsyncStore {
+    final class Flag {
+        var value: Bool = false
+        
+        func toggle() {
+            self.value = !value
+        }
+    }
     nonisolated
     func reduce(_ effect: Effect, awaitTask: Bool = false) async {
         switch effect {
@@ -97,7 +127,6 @@ fileprivate extension AsyncStore {
         case .set(let setter):
             await execute(setter)
         case .task(let operation, let id):
-            print("[AsyncStore] executing \(String(describing: id))")
             let task = Task {
                 let effect = await perform(operation)
                 await run(effect)
@@ -112,13 +141,20 @@ fileprivate extension AsyncStore {
                 await reduce(effect, awaitTask: true)
             }
         case .merge(let effects):
-            await withTaskGroup { [weak self] group in
-                for effect in effects {
-                    guard let self else { break }
-                    group.addTask { await self.reduce(effect) }
+            let mergeStream = AsyncStream<Void> { cont in
+                effects.forEach { effect in
+                    Task {
+                        print("[TEST] merge reducing \(effect)")
+                        await reduce(effect)
+                        cont.yield(())
+                    }
                 }
-                
-                for await _ in group { }
+            }
+            
+            var mergeCount = 0
+            for await _ in mergeStream {
+                mergeCount += 1
+                guard mergeCount < effects.count else { break }
             }
         }
     }
@@ -134,6 +170,8 @@ fileprivate extension AsyncStore {
 
     func execute(_ setter: (inout State) -> Void) {
         setter(&state)
+        print("[\(type(of: self))] sending state")
+        stateContinuations.values.forEach { $0.yield(state) }
     }
     
     func perform(_ operation: @escaping AsyncTask) async -> Effect {
@@ -144,3 +182,4 @@ fileprivate extension AsyncStore {
         }
     }
 }
+
