@@ -4,15 +4,25 @@ import SwiftSyntaxMacroExpansion
 @testable import AsyncStore
 
 extension Tag {
+    @Tag static var store: Self
     @Tag static var effects: Self
 }
 
 @MainActor
 @Suite("AsyncStore")
 struct AsyncStoreTests {
-    @MainActor
     @Test("Init")
     func testInit() async throws {
+        let expectedState = TestState(integer: 10, string: "Hello", intArray: [3])
+        let testStore = TestStore(state: expectedState)
+        
+        #expect(expectedState.integer == testStore.integer, "")
+        #expect(expectedState.string == testStore.string, "")
+        #expect(expectedState.intArray == testStore.intArray, "")
+    }
+    
+    @Test("Task Cancellation")
+    func testCancellation() async throws {
         let expectedState = TestState(integer: 10, string: "Hello", intArray: [3])
         let testStore = TestStore(state: expectedState)
         
@@ -28,11 +38,10 @@ struct AsyncStoreEffectTests {
     @Test("None Effect", .tags(.effects))
     func testNoneEffect() async throws {
         let testStore = TestStore()
-        let awaiter = StoreAwaiter(store: testStore)
         do {
-            try await awaiter.wait(for: \.integer, running: .none, timeout: 1.0)
+            try await testStore.wait(for: \.integer, running: .none, timeout: 1.0)
             #expect(Bool(false), "The store did not time out")
-        } catch let error as StoreAwaiter<TestState, TestTaskIdentifier>.Error {
+        } catch let error as WaitError {
             #expect(error == .timedout)
         } catch {
             #expect(Bool(false), "The store did not time out")
@@ -48,19 +57,18 @@ struct AsyncStoreEffectTests {
         )
         
         let testStore = TestStore()
-        let awaiter = StoreAwaiter(store: testStore)
         
-        try await awaiter.wait(
+        try await testStore.wait(
             for: \.integer,
             running: .set(\.integer, to: expectedState.integer)
         )
         
-        try await awaiter.wait(
+        try await testStore.wait(
             for: \.integer,
             running: .set(\.string, to: expectedState.string)
         )
         
-        try await awaiter.wait(
+        try await testStore.wait(
             for: \.intArray,
             running: .set(\.intArray, to: expectedState.intArray)
         )
@@ -90,10 +98,9 @@ struct AsyncStoreEffectTests {
         }
         
         let testStore = TestStore()
-        let awaiter = StoreAwaiter(store: testStore)
-        try await awaiter.wait(
+        try await testStore.wait(
             for: \.intArray,
-            count: 3,
+            updateCount: 3,
             running: .concatenate(
                 .task(task1),
                 .task(task2),
@@ -124,10 +131,9 @@ struct AsyncStoreEffectTests {
         }
         
         let testStore = TestStore()
-        let awaiter = StoreAwaiter(store: testStore)
-        try await awaiter.wait(
+        try await testStore.wait(
             for: \.intArray,
-            count: 3,
+            updateCount: 3,
             running: .merge(
                 .task(task1),
                 .task(task2),

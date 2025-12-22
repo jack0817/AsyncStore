@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  TestUtilities.swift
 //  AsyncStore
 //
 //  Created by Wendell Thompson on 12/20/25.
@@ -9,41 +9,33 @@ import AsyncStore
 import Foundation
 import Testing
 
-@MainActor
-final class StoreAwaiter<State: Sendable, TaskId: Hashable & Sendable> {
-    enum Error: Swift.Error {
-        case timedout
-    }
-    
-    let store: AsyncStore<State, TaskId>
-    
-    init(store: AsyncStore<State, TaskId>) {
-        self.store = store
-    }
-    
-    func wait<Value: Equatable & Sendable>(
+enum WaitError: Swift.Error {
+    case timedout
+}
+
+public extension AsyncStore {
+    func wait<Value>(
         for property: KeyPath<State, Value>,
-        count: Int = 1,
-        running effect: AsyncStore<State, TaskId>.Effect,
+        updateCount count: Int = 1,
+        running effect: Effect,
         timeout: TimeInterval = 4.0,
         sourceLocation: SourceLocation = #_sourceLocation
-    ) async throws {
+    ) async throws where Value: Equatable & Sendable {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Swift.Error>) in
             var didTimeout = false
             
             let timeoutTask = Task {
                 try await Task.sleep(for: .seconds(timeout))
                 didTimeout = true
-                continuation.resume(throwing: Error.timedout)
+                continuation.resume(throwing: WaitError.timedout)
             }
             
             Task { @MainActor in
                 var counter = 0
-                let stream = store.stream(for: property)
+                let stream = stream(for: property)
 
                 for await _ in stream {
                     counter += 1
-                    print("[\(type(of: self))] counter: \(counter) count: \(count)")
                     guard counter < count else {
                         timeoutTask.cancel()
                         if !didTimeout { continuation.resume() }
@@ -52,7 +44,7 @@ final class StoreAwaiter<State: Sendable, TaskId: Hashable & Sendable> {
                 }
             }
             
-            store.run(effect)
+            run(effect)
         }
     }
 }
