@@ -40,7 +40,6 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         
         self.runEffectTask = Task(priority: .background) { [weak self] in
             for await effect in stream {
-                print("[\(type(of: self))] received effect \(effect)")
                 guard let self, !Task.isCancelled else { return }
                 await self.reduce(effect)
             }
@@ -93,12 +92,15 @@ public extension AsyncStore {
     
     func stream<Value: Equatable & Sendable>(
         for property: KeyPath<State, Value>
-    ) ->  AsyncRemoveDuplicatesSequence<AsyncMapSequence<AsyncStream<State>, Value>> {
+    ) -> AnyAsyncSequence<Value> {
         AsyncStream<State> { continuation in
             stateContinuations[continuation.hashValue] = continuation
+            continuation.yield(state)
         }
         .map { $0[keyPath: property] }
         .removeDuplicates()
+        .dropFirst()
+        .eraseToAnyAsyncSequence()
     }
     
     func finishAllStreams() {
@@ -142,7 +144,6 @@ fileprivate extension AsyncStore {
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
                     Task {
-                        print("[TEST] merge reducing \(effect)")
                         await reduce(effect)
                         cont.yield(())
                     }
@@ -163,6 +164,12 @@ fileprivate extension AsyncStore {
 fileprivate extension AsyncStore {
     func track(_ task: Task<Void, Never>, for id: TaskIdentifier?) {
         guard let id else { return }
+        if let existingTask = tasks[id] {
+            // TODO: Add logging here
+            print("[TEST] cancelling existing task for \(id)")
+            existingTask.cancel()
+        }
+        
         tasks[id] = task
     }
 

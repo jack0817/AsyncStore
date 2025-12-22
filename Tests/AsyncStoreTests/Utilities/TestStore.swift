@@ -9,9 +9,22 @@ import AsyncStore
 import Foundation
 
 struct TestState: Sendable {
+    enum Error: Swift.Error, Equatable {
+        case cancelled(String)
+        case other(String)
+        
+        var isCancelled: Bool {
+            switch self {
+            case .cancelled: true
+            default: false
+            }
+        }
+    }
+    
     var integer = 0
     var string = ""
     var intArray: [Int] = []
+    var error: Error? = .none
 }
 
 enum TestTaskIdentifier: Hashable, Sendable {

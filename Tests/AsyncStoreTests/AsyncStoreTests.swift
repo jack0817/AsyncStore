@@ -11,7 +11,7 @@ extension Tag {
 @MainActor
 @Suite("AsyncStore")
 struct AsyncStoreTests {
-    @Test("Init")
+    @Test("Init", .tags(.store))
     func testInit() async throws {
         let expectedState = TestState(integer: 10, string: "Hello", intArray: [3])
         let testStore = TestStore(state: expectedState)
@@ -21,14 +21,26 @@ struct AsyncStoreTests {
         #expect(expectedState.intArray == testStore.intArray, "")
     }
     
-    @Test("Task Cancellation")
+    @Test("Task Cancellation", .tags(.store))
     func testCancellation() async throws {
-        let expectedState = TestState(integer: 10, string: "Hello", intArray: [3])
-        let testStore = TestStore(state: expectedState)
+        let testStore = TestStore()
         
-        #expect(expectedState.integer == testStore.integer, "")
-        #expect(expectedState.string == testStore.string, "")
-        #expect(expectedState.intArray == testStore.intArray, "")
+        let task: @Sendable () async throws -> TestStore.Effect = {
+            do {
+                try await Task.sleep(for: .seconds(2))
+                return .set(\.error, to: .none)
+            } catch let error as CancellationError {
+                return .set(\.error, to: .cancelled(error.localizedDescription))
+            } catch {
+                return .set(\.error, to: .other(error.localizedDescription))
+            }
+        }
+        
+        testStore.run(.task(task, id: .one))
+        try? await Task.sleep(for: .milliseconds(500))
+        testStore.cancel(id: .one)
+        try await testStore.wait(for: \.error)
+        #expect(testStore.error?.isCancelled == true, "")
     }
 }
 
@@ -64,7 +76,7 @@ struct AsyncStoreEffectTests {
         )
         
         try await testStore.wait(
-            for: \.integer,
+            for: \.string,
             running: .set(\.string, to: expectedState.string)
         )
         

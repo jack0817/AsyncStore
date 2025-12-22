@@ -8,8 +8,12 @@
 import Testing
 @testable import AsyncStore
 
+extension Tag {
+    @Tag static var macro: Self
+}
+
 struct Test {
-    @Test("Test Stringify")
+    @Test("Test Stringify", .tags(.macro))
     func test() async throws {
         let expectedValue = "123"
         let actualValue = #Stringify(123)

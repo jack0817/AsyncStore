@@ -17,7 +17,7 @@ public extension AsyncStore {
     func wait<Value>(
         for property: KeyPath<State, Value>,
         updateCount count: Int = 1,
-        running effect: Effect,
+        running effect: Effect = .none,
         timeout: TimeInterval = 4.0,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws where Value: Equatable & Sendable {
@@ -34,7 +34,7 @@ public extension AsyncStore {
                 var counter = 0
                 let stream = stream(for: property)
 
-                for await _ in stream {
+                for try await _ in stream {
                     counter += 1
                     guard counter < count else {
                         timeoutTask.cancel()
