@@ -21,6 +21,19 @@ struct AsyncStoreTests {
         #expect(expectedState.intArray == testStore.intArray, "")
     }
     
+    @Test("Error Mapping", .tags(.store))
+    func testErrorMapping() async throws {
+        let throwingTask: @Sendable () async throws -> TestStore.Effect = {
+            throw TestState.Error.other("Testing Error Mapping")
+        }
+        
+        let testStore = TestStore()
+        try await testStore.wait(
+            for: \.error,
+            running: .task(throwingTask)
+        )
+    }
+    
     @Test("Task Cancellation", .tags(.store))
     func testCancellation() async throws {
         let testStore = TestStore()

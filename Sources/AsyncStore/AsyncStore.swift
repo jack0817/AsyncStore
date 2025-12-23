@@ -20,36 +20,25 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     fileprivate(set) var state: State
     
     @ObservationIgnored
-    private var runEffectTask: Task<Void, Never>? = .none
-    
-    @ObservationIgnored
-    private var runContinuation: AsyncStream<Effect>.Continuation? = .none
+    public var mapError: (Error) -> Effect = { _ in .none }
     
     @ObservationIgnored
     private var tasks: [TaskIdentifier: Task<Void, Never>] = [:]
     
     @ObservationIgnored
     private var stateContinuations: [Int: AsyncStream<State>.Continuation] = [:]
+    
+    @ObservationIgnored
+    private let logger = AsyncStoreLogger(.info)
 
     public init(state: State) {
         self.state = state
-        
-        let stream = AsyncStream<Effect> { continuation in
-            self.runContinuation = continuation
-        }
-        
-        self.runEffectTask = Task(priority: .background) { [weak self] in
-            for await effect in stream {
-                guard let self, !Task.isCancelled else { return }
-                await self.reduce(effect)
-            }
-        }
+        logger.info("[\(type(of: self))] init")
     }
     
     deinit {
-        runContinuation?.finish()
-        runEffectTask?.cancel()
         stateContinuations.values.forEach { $0.finish() }
+        logger.info("[\(type(of: self))] deint")
     }
 
     public subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
@@ -83,7 +72,7 @@ public extension AsyncStore {
     }
     
     func run(_ effect: Effect) {
-        runContinuation?.yield(effect)
+        Task { await reduce(effect) }
     }
     
     func store<Key: AsyncStoreEnvironmentKey>(for key: Key.Type) -> Key.Store {
@@ -94,6 +83,14 @@ public extension AsyncStore {
         for property: KeyPath<State, Value>
     ) -> AnyAsyncSequence<Value> {
         AsyncStream<State> { continuation in
+            if stateContinuations[continuation.hashValue] != .none {
+                logger.warning(
+                    """
+                    [\(type(of: self))] Existing continuation for \(property) is being overwritten
+                    """
+                )
+            }
+
             stateContinuations[continuation.hashValue] = continuation
             continuation.yield(state)
         }
@@ -119,6 +116,7 @@ fileprivate extension AsyncStore {
             self.value = !value
         }
     }
+    
     nonisolated
     func reduce(_ effect: Effect, awaitTask: Bool = false) async {
         switch effect {
@@ -165,8 +163,7 @@ fileprivate extension AsyncStore {
     func track(_ task: Task<Void, Never>, for id: TaskIdentifier?) {
         guard let id else { return }
         if let existingTask = tasks[id] {
-            // TODO: Add logging here
-            print("[TEST] cancelling existing task for \(id)")
+            logger.warning("[\(type(of: self))] cancelling existing task for \(id)")
             existingTask.cancel()
         }
         
@@ -185,6 +182,7 @@ fileprivate extension AsyncStore {
             switch continuation.yield(state) {
             case .terminated:
                 terminatedKeys.append(continuation.hashValue)
+                logger.warning("[\(type(of: self))] yield to terminated continuation")
             default:
                 break
             }
@@ -196,12 +194,12 @@ fileprivate extension AsyncStore {
         }
     }
     
-    nonisolated
     func perform(_ operation: @escaping AsyncTask) async -> Effect {
         do {
             return try await operation()
         } catch {
-            return .none
+            logger.info("[\(type(of: self))] mapping error '\(error.localizedDescription)'")
+            return mapError(error)
         }
     }
 }

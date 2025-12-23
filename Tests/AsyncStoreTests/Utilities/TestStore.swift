@@ -36,5 +36,15 @@ typealias TestStore = AsyncStore<TestState, TestTaskIdentifier>
 extension TestStore {
     convenience init() {
         self.init(state: .init())
+        self.mapError = handleError
+    }
+    
+    private func handleError(_ error: Swift.Error) -> Effect {
+        switch error {
+        case let cancelError as CancellationError:
+            .set(\.error, to: .cancelled(cancelError.localizedDescription))
+        default:
+            .set(\.error, to: .other(error.localizedDescription))
+        }
     }
 }
