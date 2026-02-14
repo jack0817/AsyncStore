@@ -117,20 +117,19 @@ fileprivate extension AsyncStore {
         }
     }
     
-    nonisolated
     func reduce(_ effect: Effect, awaitTask: Bool = false) async {
         switch effect {
         case .none:
             break
         case .set(let setter):
-            await execute(setter)
+            execute(setter)
         case .task(let operation, let id):
             let task = Task {
                 let effect = await perform(operation)
-                await run(effect)
+                await reduce(effect)
             }
             
-            await track(task, for: id)
+            track(task, for: id)
             
             guard awaitTask else { return }
             await task.value
