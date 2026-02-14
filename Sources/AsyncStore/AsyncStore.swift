@@ -139,20 +139,25 @@ fileprivate extension AsyncStore {
                 await reduce(effect, awaitTask: true)
             }
         case .merge(let effects):
+            logger.info("[\(type(of: self))] merge \(effect)")
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
                     Task {
                         await reduce(effect)
                         cont.yield(())
+                        logger.info("[\(type(of: self))] merge task done")
                     }
                 }
             }
             
             var mergeCount = 0
             for await _ in mergeStream {
+                logger.info("[\(type(of: self))] merge receive")
                 mergeCount += 1
                 guard mergeCount < effects.count else { break }
             }
+            
+            logger.info("[\(type(of: self))] merge complete")
         }
     }
 }
