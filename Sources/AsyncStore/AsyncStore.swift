@@ -133,6 +133,7 @@ fileprivate extension AsyncStore {
             
             guard awaitTask else { return }
             await task.value
+            removeTask(for: id)
         case .concatenate(let effects):
             for effect in effects {
                 await reduce(effect, awaitTask: true)
@@ -167,6 +168,11 @@ fileprivate extension AsyncStore {
         }
         
         tasks[id] = task
+    }
+    
+    func removeTask(for id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id] = .none
     }
 
     func execute(_ setter: (inout State) -> Void) {
