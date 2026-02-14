@@ -142,7 +142,7 @@ fileprivate extension AsyncStore {
             let mergeStream = AsyncStream<Void> { cont in
                 effects.forEach { effect in
                     Task {
-                        await reduce(effect)
+                        await reduce(effect, awaitTask: true)
                         cont.yield(())
                         logger.info("[\(type(of: self))] merge task done")
                     }
