@@ -12,6 +12,7 @@ import SwiftUI
 @Observable
 @dynamicMemberLookup
 public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
+    @MainActor
     public var state: State
     
     @ObservationIgnored
@@ -59,6 +60,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         stateContinuations.values.forEach { $0.finish() }
     }
     
+    @MainActor
     public subscript<Value>(dynamicMember property: KeyPath<State, Value>) -> Value {
         get { state[keyPath: property] }
     }
@@ -125,6 +127,7 @@ fileprivate extension AsyncStore {
         tasks[id] = task
     }
     
+    @MainActor
     func yieldState() {
         var terminatedIds: [UUID] = []
 
