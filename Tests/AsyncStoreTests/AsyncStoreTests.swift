@@ -4,6 +4,7 @@ import Testing
 extension Tag {
     @Tag static var store: Self
     @Tag static var effects: Self
+    @Tag static var environment: Self
 }
 
 @Suite("Async Store Tests")
@@ -56,9 +57,9 @@ struct AsyncStoreTests {
         }
         
         let concatEffect: TestStore.Effect = .concatenate(
-            .task { try await append(1, after: .seconds(2)) },
-            .task { try await append(2, after: .seconds(1)) },
-            .task { try await append(3, after: .seconds(0)) },
+            .task { try await append(1, after: .milliseconds(500)) },
+            .task { try await append(2, after: .milliseconds(250)) },
+            .task { try await append(3, after: .milliseconds(0)) },
         )
         
         try await StoreWaiter(store: TestStore())
@@ -76,13 +77,36 @@ struct AsyncStoreTests {
         }
         
         let mergeEffect: TestStore.Effect = .merge(
-            .task { try await append(1, after: .seconds(2)) },
-            .task { try await append(2, after: .seconds(1)) },
-            .task { try await append(3, after: .seconds(0)) },
+            .task { try await append(1, after: .milliseconds(500)) },
+            .task { try await append(2, after: .milliseconds(250)) },
+            .task { try await append(3, after: .milliseconds(0)) },
         )
         
         try await StoreWaiter(store: TestStore())
             .wait(for: \.ints, count: 3, running: mergeEffect)
             .expect(\.ints, toEqual: [3, 2, 1])
+    }
+    
+    @MainActor
+    @Test("Environment", .tags(.environment))
+    func testEnvironment() async throws {
+        let parentEnv = AsyncStoreEnvironmentValues()
+        parentEnv.testService = .mock([1, 2, 3])
+        
+        // Test Environment
+        let store1 = TestStore(environment: parentEnv)
+        let actualValue1 = try await store1.env.testService.getInts()
+        #expect(actualValue1 == [1, 2, 3])
+        
+        // Test Child Environment
+        let store2 = TestStore(environment: store1.env.child())
+        let actualValue2 = try await store2.env.testService.getInts()
+        #expect(actualValue2 == [1, 2, 3])
+        
+        // Test Child Override
+        store2.env.testService = .mock([3, 2, 1])
+        let actualValue3 = try await store2.env.testService.getInts()
+        #expect(actualValue3 == [3, 2, 1])
+        
     }
 }

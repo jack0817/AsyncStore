@@ -29,9 +29,13 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     @ObservationIgnored
     private var stateContinuations: [UUID: AsyncStream<State>.Continuation] = [:]
     
+    @ObservationIgnored
+    public let env: AsyncStoreEnvironmentValues
+    
     @MainActor
-    public init(state: State) {
+    public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
+        self.env = environment
         
         let runStream = AsyncStream<Effect> { continuation in
             self.runContinuation = continuation

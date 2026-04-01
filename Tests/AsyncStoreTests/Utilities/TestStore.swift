@@ -32,8 +32,8 @@ public typealias TestStore = AsyncStore<TestState, TestTask>
 
 public extension TestStore {
     @MainActor
-    convenience init() {
-        self.init(state: .init())
+    convenience init(environment: AsyncStoreEnvironmentValues = .shared) {
+        self.init(state: .init(), environment: environment)
     }
     
     func appendIntTask(value: Int, after duration: Duration) async throws -> Effect {
