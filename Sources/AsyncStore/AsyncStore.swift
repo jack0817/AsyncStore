@@ -10,9 +10,9 @@ import Foundation
 import SwiftUI
 
 @Observable
+@MainActor
 @dynamicMemberLookup
 public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
-    @MainActor
     public var state: State
     
     @ObservationIgnored
@@ -33,10 +33,8 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     @ObservationIgnored
     public let env: AsyncStoreEnvironmentValues
     
-    @MainActor
     public var repo: AsyncStoreEnvironmentValues { .shared }
     
-    @MainActor
     public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
         self.env = environment
@@ -60,7 +58,6 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         stateContinuations.values.forEach { $0.finish() }
     }
     
-    @MainActor
     public subscript<Value>(dynamicMember property: KeyPath<State, Value>) -> Value {
         get { state[keyPath: property] }
     }
@@ -84,7 +81,6 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
 }
 
 fileprivate extension AsyncStore {
-    @MainActor
     func reduce(_ effect: Effect) async {
         switch effect {
         case .none:
@@ -127,7 +123,6 @@ fileprivate extension AsyncStore {
         tasks[id] = task
     }
     
-    @MainActor
     func yieldState() {
         var terminatedIds: [UUID] = []
 
