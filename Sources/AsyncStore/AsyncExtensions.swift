@@ -26,15 +26,15 @@ public struct AnyAsyncSequence<Element>: AsyncSequence {
 
 public extension AnyAsyncSequence {
     struct AnyAsyncSequenceIterator: AsyncIteratorProtocol {
-        private let _next: () async throws -> Element?
+        private let _next: () async -> Element?
         
         init<I: AsyncIteratorProtocol>(_ iterator: I) where I.Element == Element {
             var iterator = iterator
-            self._next = { try await iterator.next() }
+            self._next = { try? await iterator.next() }
         }
         
-        public mutating func next() async throws -> Element? {
-            try await _next()
+        public mutating func next() async -> Element? {
+            await _next()
         }
     }
 }

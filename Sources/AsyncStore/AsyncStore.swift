@@ -33,6 +33,9 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     public let env: AsyncStoreEnvironmentValues
     
     @MainActor
+    public var repo: AsyncStoreEnvironmentValues { .shared }
+    
+    @MainActor
     public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
         self.env = environment

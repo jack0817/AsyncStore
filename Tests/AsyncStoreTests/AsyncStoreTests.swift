@@ -107,6 +107,5 @@ struct AsyncStoreTests {
         store2.env.testService = .mock([3, 2, 1])
         let actualValue3 = try await store2.env.testService.getInts()
         #expect(actualValue3 == [3, 2, 1])
-        
     }
 }

@@ -41,3 +41,15 @@ public extension TestStore {
         return .append(value, to: \.ints)
     }
 }
+
+public enum TestStoreRepositoryKey: AsyncStoreRepositoryKey {
+    public typealias State = TestState
+    public typealias TaskIdentifier = TestTask
+}
+
+public extension AsyncStoreRepository {
+    var testStore: TestStore {
+        get { self[TestStoreRepositoryKey.self] }
+        set { self[TestStoreRepositoryKey.self] = newValue }
+    }
+}
