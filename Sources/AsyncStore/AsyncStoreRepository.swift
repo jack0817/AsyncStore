@@ -22,7 +22,7 @@ public final class AsyncStoreRepository {
     
     private init() { }
     
-    subscript<Key: AsyncStoreRepositoryKey>(_ key: Key.Type) -> Key.Store {
+    public subscript<Key: AsyncStoreRepositoryKey>(_ key: Key.Type) -> Key.Store {
         get {
             let id = ObjectIdentifier(key)
             guard let store = storage[id] as? Key.Store else {
