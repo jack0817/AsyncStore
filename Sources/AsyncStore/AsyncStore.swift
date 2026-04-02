@@ -43,7 +43,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
             self.runContinuation = continuation
         }
         
-        runTask = Task(priority: .background) { @MainActor in
+        runTask = Task(priority: .background) {
             for await effect in runStream {
                 guard !Task.isCancelled else { break }
                 await reduce(effect)
