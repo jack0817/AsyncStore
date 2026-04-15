@@ -56,19 +56,17 @@ public final class StoreWaiter<State: Sendable, TaskId: Hashable & Sendable> {
         }
         
         updateTask = Task {
-            let updateStream = store.stream(for: property)
+            let updateStream = store.stream(for: property).dropFirst()
             var updateCount = 0
-            do {
-                for try await _ in updateStream {
-                    guard !Task.isCancelled else { return updateCount }
-                    updateCount += 1
-                    if updateCount >= count { break }
-                }
-                timeoutTask.cancel()
-                return updateCount
-            } catch {
-                return updateCount
+            
+            for await _ in updateStream {
+                guard !Task.isCancelled else { return updateCount }
+                updateCount += 1
+                if updateCount >= count { break }
             }
+            
+            timeoutTask.cancel()
+            return updateCount
         }
         
         operation(store)

@@ -84,6 +84,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     ) -> AnyAsyncSequence<Value> {
         let stateStream = AsyncStream<State> { continuation in
             stateContinuations[.init()] = continuation
+            continuation.yield(state)
         }
         
         return stateStream
