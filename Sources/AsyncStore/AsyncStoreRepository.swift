@@ -16,7 +16,7 @@ public protocol AsyncStoreRepositoryKey {
 
 public final class AsyncStoreRepository {
     @MainActor
-    internal static let shared = AsyncStoreRepository()
+    public static let shared = AsyncStoreRepository()
     
     private var storage: [ObjectIdentifier: Any] = [:]
     
