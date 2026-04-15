@@ -72,7 +72,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         let defaultValue = state[keyPath: property]
         return .init(
             get: { [weak self] in self?.state[keyPath: property] ?? defaultValue },
-            set: { [weak self] in self?.run(.set(property, to: $0)) }
+            set: { [weak self] in self?.state[keyPath: property] = $0 }
         )
     }
     
