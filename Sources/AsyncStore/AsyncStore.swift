@@ -98,7 +98,10 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         on property: KeyPath<Key.State, Value>,
         map: @escaping (Value) -> Effect
     ) {
-        let stream = AsyncStoreRepository.shared[Key.self].stream(for: property)
+        let stream = AsyncStoreRepository.shared[Key.self]
+            .stream(for: property)
+            .removeDuplicates()
+        
         Task {
             for await value in stream {
                 let effect = map(value)
@@ -112,7 +115,10 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         on property: KeyPath<OtherState, Value>,
         map: @escaping (Value) -> Effect
     ) {
-        let stream = AsyncStoreRepository.shared[keyPath: storeKeyPath].stream(for: property)
+        let stream = AsyncStoreRepository.shared[keyPath: storeKeyPath]
+            .stream(for: property)
+            .removeDuplicates()
+        
         Task {
             for await value in stream {
                 let effect = map(value)
