@@ -91,6 +91,34 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
             .removeDuplicates()
             .eraseToAnyAsyncSequence()
     }
+    
+    public func bind<Key: AsyncStoreRepositoryKey, Value: Sendable & Equatable>(
+        to repoKey: Key,
+        on property: KeyPath<Key.State, Value>,
+        map: @escaping (Value) -> Effect
+    ) {
+        let stream = AsyncStoreRepository.shared[Key.self].stream(for: property)
+        Task {
+            for await value in stream {
+                let effect = map(value)
+                run(effect)
+            }
+        }
+    }
+    
+    public func bind<OtherState, TaskId, Value: Sendable & Equatable>(
+        to storeKeyPath: KeyPath<AsyncStoreRepository, AsyncStore<OtherState, TaskId>>,
+        on property: KeyPath<OtherState, Value>,
+        map: @escaping (Value) -> Effect
+    ) {
+        let stream = AsyncStoreRepository.shared[keyPath: storeKeyPath].stream(for: property)
+        Task {
+            for await value in stream {
+                let effect = map(value)
+                run(effect)
+            }
+        }
+    }
 }
 
 fileprivate extension AsyncStore {
