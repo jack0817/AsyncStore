@@ -56,6 +56,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         runTask?.cancel()
         tasks.values.forEach { $0.cancel() }
         stateContinuations.values.forEach { $0.finish() }
+        print("[\(type(of: self))] deinit")
     }
     
     public subscript<Value>(dynamicMember property: KeyPath<State, Value>) -> Value {
