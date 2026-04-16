@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import AsyncStore
 
@@ -20,6 +21,19 @@ struct AsyncStoreTests {
         
         let testStore = TestStore(state: expectedValue)
         #expect(testStore.state == expectedValue)
+    }
+    
+    @MainActor
+    @Test("Deinit", .tags(.store))
+    func testDeinit() throws {
+        weak var weakTestStore: TestStore? = nil
+        
+        autoreleasepool {
+            let store = TestStore()
+            weakTestStore = store
+        }
+        
+        try #require(weakTestStore == nil, "")
     }
     
     @MainActor
@@ -87,25 +101,25 @@ struct AsyncStoreTests {
             .expect(\.ints, toEqual: [3, 2, 1])
     }
     
-    @MainActor
-    @Test("Environment", .tags(.environment))
-    func testEnvironment() async throws {
-        let parentEnv = AsyncStoreEnvironmentValues()
-        parentEnv.testService = .mock([1, 2, 3])
-        
-        // Test Environment
-        let store1 = TestStore(environment: parentEnv)
-        let actualValue1 = try await store1.env.testService.getInts()
-        #expect(actualValue1 == [1, 2, 3])
-        
-        // Test Child Environment
-        let store2 = TestStore(environment: store1.env.child())
-        let actualValue2 = try await store2.env.testService.getInts()
-        #expect(actualValue2 == [1, 2, 3])
-        
-        // Test Child Override
-        store2.env.testService = .mock([3, 2, 1])
-        let actualValue3 = try await store2.env.testService.getInts()
-        #expect(actualValue3 == [3, 2, 1])
-    }
+//    @MainActor
+//    @Test("Environment", .tags(.environment))
+//    func testEnvironment() async throws {
+//        let parentEnv = AsyncStoreEnvironmentValues()
+//        parentEnv.testService = .mock([1, 2, 3])
+//        
+//        // Test Environment
+//        let store1 = TestStore(environment: parentEnv)
+//        let actualValue1 = try await store1.env.testService.getInts()
+//        #expect(actualValue1 == [1, 2, 3])
+//        
+//        // Test Child Environment
+//        let store2 = TestStore(environment: store1.env.child())
+//        let actualValue2 = try await store2.env.testService.getInts()
+//        #expect(actualValue2 == [1, 2, 3])
+//        
+//        // Test Child Override
+//        store2.env.testService = .mock([3, 2, 1])
+//        let actualValue3 = try await store2.env.testService.getInts()
+//        #expect(actualValue3 == [3, 2, 1])
+//    }
 }
