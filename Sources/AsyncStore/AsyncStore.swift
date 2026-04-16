@@ -103,10 +103,11 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
             .stream(for: property)
             .removeDuplicates()
         
-        Task {
+        Task { [weak self] in
             for await value in stream {
+                guard !Task.isCancelled, let self else { return }
                 let effect = map(value)
-                run(effect)
+                self.run(effect)
             }
         }
     }
@@ -120,10 +121,11 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
             .stream(for: property)
             .removeDuplicates()
         
-        Task {
+        Task { [weak self] in
             for await value in stream {
+                guard !Task.isCancelled, let self else { return }
                 let effect = map(value)
-                run(effect)
+                self.run(effect)
             }
         }
     }
