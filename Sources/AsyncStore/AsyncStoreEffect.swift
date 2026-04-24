@@ -26,6 +26,14 @@ public extension AsyncStore.Effect {
         .task(operation, id: .none)
     }
     
+    static func task<Parameter: Sendable>(
+        id: TaskIdentifier? = .none,
+        param: Parameter,
+        _ operation: @Sendable @escaping (Parameter) async throws -> Self
+    ) -> Self {
+        .task({ try await operation(param) }, id: id)
+    }
+    
     static func concatenate(_ effects: Self ...) -> Self {
         self.concatenate(effects)
     }
