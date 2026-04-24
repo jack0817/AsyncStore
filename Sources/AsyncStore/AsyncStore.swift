@@ -33,7 +33,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     @ObservationIgnored
     public let env: AsyncStoreEnvironmentValues
     
-    public var repo: AsyncStoreEnvironmentValues { .shared }
+    public var repo: AsyncStoreRepository { .shared }
     
     public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
