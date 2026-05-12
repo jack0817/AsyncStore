@@ -13,7 +13,7 @@ import SwiftUI
 @MainActor
 @dynamicMemberLookup
 public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
-    public var state: State
+    public fileprivate(set) var state: State
     
     @ObservationIgnored
     public var mapError: (@Sendable (any Error) -> Effect)? = .none
