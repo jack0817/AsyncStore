@@ -9,12 +9,30 @@ import AsyncAlgorithms
 import Foundation
 import SwiftUI
 
+/// A generic, observable state container that drives SwiftUI views through a unidirectional data flow.
+///
+/// `AsyncStore` holds a single ``state`` value and accepts ``Effect`` values via ``run(_:)`` to mutate
+/// that state. Effects can set state synchronously, perform async work off the main thread, or compose
+/// multiple operations sequentially or concurrently.
+///
+/// The store is `@Observable`, so SwiftUI views that read its properties re-render automatically.
+/// It also supports `@dynamicMemberLookup`, letting you access state properties directly on the store
+/// (e.g., `store.name` instead of `store.state.name`).
+///
+/// - Parameters:
+///   - State: The `Sendable` value type that holds your feature's data.
+///   - TaskIdentifier: A `Hashable & Sendable` type used to identify and cancel in-flight async tasks.
 @Observable
 @MainActor
 @dynamicMemberLookup
 public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
+    /// The current state value. Mutations trigger SwiftUI view updates.
     public fileprivate(set) var state: State
     
+    /// A closure that maps errors thrown inside `.task` effects into new effects.
+    ///
+    /// By default, errors are mapped to ``Effect/none``. Assign a custom closure to convert
+    /// errors into state mutations — for example, setting an error message property.
     @ObservationIgnored
     public var mapError: (@Sendable (any Error) -> Effect) = { _ in .none }
     
@@ -34,8 +52,14 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     private var stateContinuations: [AsyncStream<State>.Continuation] = []
     
     @ObservationIgnored
+    /// The environment values available to this store, used for dependency injection.
     public let env: AsyncStoreEnvironmentValues
     
+    /// Creates a new store with the given initial state and optional environment.
+    ///
+    /// - Parameters:
+    ///   - state: The initial state value.
+    ///   - environment: The environment values for dependency injection. Defaults to the shared instance.
     public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
         self.env = environment
@@ -68,10 +92,23 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
 // MARK: Public API
 
 public extension AsyncStore {
+    /// Dispatches an effect to the store for processing.
+    ///
+    /// This is the primary entry point for all state changes. Effects are processed
+    /// asynchronously in the order they are dispatched.
+    ///
+    /// - Parameter effect: The effect to execute.
     func run(_ effect: Effect) {
         runContinuation?.yield(effect)
     }
     
+    /// Creates a two-way SwiftUI `Binding` for a state property.
+    ///
+    /// The binding reads the current value from state and writes new values back,
+    /// propagating changes to any active state streams.
+    ///
+    /// - Parameter property: A writable key path to the state property.
+    /// - Returns: A `Binding` that reads from and writes to the store's state.
     func binding<Value: Sendable & Equatable>(
         for property: WritableKeyPath<State, Value>
     ) -> Binding<Value> {
@@ -85,6 +122,16 @@ public extension AsyncStore {
         )
     }
     
+    /// Binds this store to a property of a shared repository store.
+    ///
+    /// When the observed property changes in the repository, the `map` closure converts
+    /// the new value into an effect that is dispatched on this store. Duplicate values
+    /// are automatically filtered.
+    ///
+    /// - Parameters:
+    ///   - repoKey: The repository key type identifying the shared store.
+    ///   - keyPath: A key path to the property to observe on the shared store's state.
+    ///   - map: A closure that converts the new property value into an effect for this store.
     func bind<Key: AsyncStoreRepositoryKey, Value: Equatable & Sendable>(
         _ repoKey: Key.Type,
         to keyPath: KeyPath<Key.State, Value>,
@@ -107,6 +154,12 @@ public extension AsyncStore {
         repoTasks[repoTaskId] = repoTask
     }
     
+    /// Reads the current value of a property from a shared repository store.
+    ///
+    /// - Parameters:
+    ///   - key: The repository key type identifying the shared store.
+    ///   - keyPath: A key path to the property to read.
+    /// - Returns: The current value of the property.
     func repo<Key: AsyncStoreRepositoryKey, Value>(
         for key: Key.Type,
         _ keyPath: KeyPath<Key.State, Value>

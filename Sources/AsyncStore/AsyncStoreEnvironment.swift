@@ -7,13 +7,25 @@
 
 import Foundation
 
+/// A protocol for defining keys in the store's dependency injection system.
+///
+/// Conform to this protocol to register a service or value that stores can access
+/// through ``AsyncStoreEnvironmentValues``. Provide a `defaultValue` that serves
+/// as the production fallback.
 @MainActor public protocol AsyncStoreEnvironmentKey {
+    /// The type of the value associated with this key.
     associatedtype Value
+    /// The default value returned when no custom value has been set.
     static var defaultValue: Value { get }
 }
 
+/// A container for dependency values that can be injected into stores.
+///
+/// Environment values support a parent-child hierarchy. A child inherits all values
+/// from its parent but can override specific keys without affecting the parent.
 @MainActor
 public final class AsyncStoreEnvironmentValues {
+    /// The shared default environment instance.
     public static let shared = AsyncStoreEnvironmentValues()
     
     private var parent: AsyncStoreEnvironmentValues?
