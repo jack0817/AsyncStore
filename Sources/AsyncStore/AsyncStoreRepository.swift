@@ -8,13 +8,26 @@
 import Foundation
 import SwiftUI
 
+/// A protocol for defining keys used to register and look up shared stores in the repository.
+///
+/// Conform to this protocol with an enum to declare the state and task identifier types
+/// of the shared store.
 public protocol AsyncStoreRepositoryKey {
+    /// The state type of the shared store.
     associatedtype State: Sendable
+    /// The task identifier type of the shared store.
     associatedtype TaskIdentifier: Sendable & Hashable
+    /// A convenience alias for the full store type.
     typealias Store = AsyncStore<State, TaskIdentifier>
 }
 
+/// A singleton registry for shared stores that enables cross-feature state sharing.
+///
+/// Register stores at app launch and access them from any feature store using
+/// ``AsyncStore/repo(for:_:)`` for one-time reads or ``AsyncStore/bind(_:to:map:)``
+/// for reactive bindings.
 public final class AsyncStoreRepository {
+    /// The shared repository instance.
     @MainActor
     public static let shared = AsyncStoreRepository()
     

@@ -1,4 +1,6 @@
 import Foundation
+import Observation
+import SwiftUI
 import Testing
 @testable import AsyncStore
 
@@ -7,6 +9,12 @@ extension Tag {
     @Tag static var effects: Self
     @Tag static var environment: Self
     @Tag static var repository: Self
+    @Tag static var observability: Self
+}
+
+private final class MutableSendableBox<T: Sendable>: @unchecked Sendable {
+    var value: T
+    init(_ value: T) { self.value = value }
 }
 
 // MARK: - Initialization
@@ -111,6 +119,28 @@ struct AsyncStoreTaskEffectTests {
             .wait(for: \.ints, running: effect)
             .expect(\.ints, toEqual: [99])
     }
+    
+    @MainActor
+    @Test("Task effect operation executes off the main actor")
+    func taskEffectRunsOffMainActor() async throws {
+        let store = TestStore()
+        let isOnMainActor = MutableSendableBox(false)
+        let effect: TestStore.Effect = .task {
+            let onMain = DispatchQueue.getSpecific(key: AsyncStoreTaskEffectTests.mainQueueKey) != nil
+            isOnMainActor.value = onMain
+            return .set(\.ints, to: [1])
+        }
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: effect)
+            .expect(\.ints, toEqual: [1])
+        #expect(!isOnMainActor.value, "Task effect operation should not run on the main actor")
+    }
+    
+    private static let mainQueueKey: DispatchSpecificKey<Bool> = {
+        let key = DispatchSpecificKey<Bool>()
+        DispatchQueue.main.setSpecific(key: key, value: true)
+        return key
+    }()
     
     @MainActor
     @Test("Task effect with id cancels previous task with the same id")
@@ -700,5 +730,211 @@ struct AsyncStoreRepositoryTests {
         
         // Consumer should be deallocated
         try #require(weakConsumer == nil, "Consumer should be deallocated after autoreleasepool")
+    }
+}
+
+@Suite("AsyncStore Observability", .tags(.observability))
+struct AsyncStoreObservabilityTests {
+    /// Creates a watchdog task that fails the test after the given timeout.
+    /// Cancel the returned task once the awaited work completes.
+    @MainActor
+    private static func watchdog(
+        timeout: Duration = .seconds(4),
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> Task<Void, Never> {
+        Task { @MainActor in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            Issue.record("Test timed out after \(timeout)", sourceLocation: sourceLocation)
+        }
+    }
+    
+    @MainActor
+    @Test("Observation fires when state is mutated via set effect")
+    func observesStateMutation() async throws {
+        let store = TestStore()
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.state
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.set(\.ints, to: [1, 2, 3]))
+            // Yield to let the run loop process the effect
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        
+        #expect(store.state.ints == [1, 2, 3])
+    }
+    
+    @MainActor
+    @Test("Observation fires when reading state via dynamic member lookup")
+    func observesViaDynamicMemberLookup() async throws {
+        let store = TestStore(state: TestState(strings: ["initial"]))
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.strings
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.set(\.strings, to: ["updated"]))
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        
+        #expect(store.strings == ["updated"])
+    }
+    
+    @MainActor
+    @Test("Observation fires for each sequential mutation")
+    func observesSequentialMutations() async throws {
+        let store = TestStore()
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        // First mutation
+        await confirmation("first onChange") { confirmed in
+            withObservationTracking {
+                _ = store.state
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.set(\.ints, to: [1]))
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        
+        #expect(store.state.ints == [1])
+        
+        // Second mutation — re-register tracking
+        await confirmation("second onChange") { confirmed in
+            withObservationTracking {
+                _ = store.state
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.set(\.strings, to: ["hello"]))
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        
+        #expect(store.state.strings == ["hello"])
+    }
+    
+    @MainActor
+    @Test("Observation fires when state is mutated via async task effect")
+    func observesAsyncTaskEffect() async throws {
+        let store = TestStore()
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.ints
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.task {
+                .set(\.ints, to: [42])
+            })
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        
+        #expect(store.ints == [42])
+    }
+    
+    @MainActor
+    @Test("Observation fires when state is mutated via binding setter")
+    func observesBindingMutation() async throws {
+        let store = TestStore()
+        let binding = store.binding(for: \.ints)
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.ints
+            } onChange: {
+                confirmed()
+            }
+            
+            binding.wrappedValue = [10, 20]
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        
+        #expect(store.ints == [10, 20])
+    }
+    
+    @MainActor
+    @Test("Observation does not fire for ObservationIgnored properties")
+    func doesNotObserveIgnoredProperties() async throws {
+        let store = TestStore()
+        let counter = Counter()
+        
+        // Track only mapError (which is @ObservationIgnored)
+        withObservationTracking {
+            _ = store.mapError
+        } onChange: {
+            Task { await counter.increment() }
+        }
+        
+        // Mutate mapError — should NOT trigger onChange
+        store.mapError = { _ in .none }
+        try await Task.sleep(for: .milliseconds(200))
+        
+        let count = await counter.count
+        #expect(count == 0, "onChange should not fire for @ObservationIgnored properties")
+    }
+    
+    @MainActor
+    @Test("Observation fires for concatenated effects that mutate state")
+    func observesConcatenatedEffects() async throws {
+        let store = TestStore()
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.state
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.concatenate(
+                .set(\.ints, to: [1]),
+                .set(\.strings, to: ["done"])
+            ))
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+    }
+    
+    @MainActor
+    @Test("Observation fires for merged effects that mutate state")
+    func observesMergedEffects() async throws {
+        let store = TestStore()
+        let dog = Self.watchdog()
+        defer { dog.cancel() }
+        
+        await confirmation("onChange called") { confirmed in
+            withObservationTracking {
+                _ = store.state
+            } onChange: {
+                confirmed()
+            }
+            
+            store.run(.merge(
+                .set(\.ints, to: [1]),
+                .set(\.strings, to: ["merged"])
+            ))
+            try? await Task.sleep(for: .milliseconds(300))
+        }
     }
 }
