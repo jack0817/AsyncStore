@@ -44,7 +44,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
             self.runContinuation = continuation
         }
         
-        runTask = Task(priority: .background) { [weak self] in
+        runTask = Task { [weak self] in
             for await effect in runStream {
                 guard !Task.isCancelled, let self else { break }
                 await self.reduce(effect)
