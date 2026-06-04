@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol AsyncStoreEnvironmentKey {
+@MainActor public protocol AsyncStoreEnvironmentKey {
     associatedtype Value: Sendable
     static var defaultValue: Value { get }
 }
