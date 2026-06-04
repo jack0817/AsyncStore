@@ -36,6 +36,14 @@ public extension AsyncStore.Effect {
     ) -> Self {
         .task({ try await operation(param) }, id: id)
     }
+    
+    static func concatenate(_ effects: Self ...) -> Self {
+        .concatenate(effects)
+    }
+    
+    static func merge(_ effects: Self ...) -> Self {
+        .merge(effects)
+    }
 }
 
 public extension AsyncStore.Effect {
