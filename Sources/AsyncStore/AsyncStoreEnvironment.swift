@@ -12,8 +12,8 @@ public protocol AsyncStoreEnvironmentKey {
     static var defaultValue: Value { get }
 }
 
+@MainActor
 public final class AsyncStoreEnvironmentValues {
-    @MainActor
     public static let shared = AsyncStoreEnvironmentValues()
     
     private var parent: AsyncStoreEnvironmentValues?

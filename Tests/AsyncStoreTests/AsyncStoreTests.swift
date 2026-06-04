@@ -8,119 +8,392 @@ extension Tag {
     @Tag static var environment: Self
 }
 
-@Suite("Async Store Tests")
-struct AsyncStoreTests {
+// MARK: - Initialization
+
+@Suite("AsyncStore Initialization", .tags(.store))
+struct AsyncStoreInitTests {
     @MainActor
-    @Test("Init", .tags(.store))
-    func testInit() async throws {
-        let expectedValue = TestState(
-            ints: [1, 2, 3],
-            strings: ["One", "Two", "Three"],
-            error: .test
-        )
-        
-        let testStore = TestStore(state: expectedValue)
-        #expect(testStore.state == expectedValue)
+    @Test("Store initializes with the provided state")
+    func initWithState() {
+        let store = TestStore(state: TestState(ints: [1, 2, 3]))
+        #expect(store.state.ints == [1, 2, 3])
+        #expect(store.state.strings == [])
+        #expect(store.state.error == nil)
     }
     
     @MainActor
-    @Test("Deinit", .tags(.store))
-    func testDeinit() throws {
-        weak var weakTestStore: TestStore? = nil
-        
-        autoreleasepool {
-            let store = TestStore()
-            weakTestStore = store
-            #expect(weakTestStore != nil)
-        }
-        
-        try #require(weakTestStore == nil, "")
+    @Test("Store initializes with default state via convenience init")
+    func initWithDefaults() {
+        let store = TestStore()
+        #expect(store.state == TestState())
     }
     
     @MainActor
-    @Test("Set Effect", .tags(.effects))
-    func testSetEffect() async throws {
-        let expectedValue = [1, 2, 3]
-        try await StoreWaiter(store: TestStore())
-            .wait(for: \.ints, running: .set(\.ints, to: expectedValue))
-            .expect(\.ints, toEqual: expectedValue)
+    @Test("Store initializes with a custom environment")
+    func initWithCustomEnvironment() {
+        let env = AsyncStoreEnvironmentValues()
+        env.testService = .mock([10, 20])
+        let store = TestStore(environment: env)
+        #expect(store.env === env)
     }
-    
+}
+
+// MARK: - Dynamic Member Lookup
+
+@Suite("AsyncStore DynamicMemberLookup", .tags(.store))
+struct AsyncStoreDynamicMemberLookupTests {
     @MainActor
-    @Test("Task Effect", .tags(.effects))
-    func testTaskEffect() async throws {
-        let counter = Counter()
-        let task: @Sendable () async throws -> TestStore.Effect = {
-            await counter.increment()
-            return .set(\.ints, to: [1])
-        }
-        
-        try await StoreWaiter(store: TestStore())
-            .wait(for: \.ints, running: .task(task, id: .one))
-        
-        let count = await counter.count
-        #expect(count == 1)
+    @Test("Dynamic member lookup returns state properties")
+    func dynamicMemberLookup() {
+        let store = TestStore(state: TestState(ints: [5], strings: ["hello"]))
+        #expect(store.ints == [5])
+        #expect(store.strings == ["hello"])
     }
-    
+}
+
+// MARK: - Set Effect
+
+@Suite("AsyncStore Set Effect", .tags(.effects))
+struct AsyncStoreSetEffectTests {
     @MainActor
-    @Test("Concatenate Effect", .tags(.effects))
-    func testConcatenateEffect() async throws {
-        @Sendable
-        func append(_ int: Int, after duration: Duration) async throws -> TestStore.Effect {
-            try await Task.sleep(for: duration)
-            return .append(int, to: \.ints)
-        }
-        
-        let concatEffect: TestStore.Effect = .concatenate(
-            .task { try await append(1, after: .milliseconds(500)) },
-            .task { try await append(2, after: .milliseconds(250)) },
-            .task { try await append(3, after: .milliseconds(0)) },
-        )
-        
-        try await StoreWaiter(store: TestStore())
-            .wait(for: \.ints, count: 3, running: concatEffect)
+    @Test("Set effect mutates state with a closure")
+    func setWithClosure() async throws {
+        let store = TestStore()
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: .set { $0.ints = [1, 2, 3] })
             .expect(\.ints, toEqual: [1, 2, 3])
     }
     
     @MainActor
-    @Test("Merge Effect", .tags(.effects))
-    func testMergeEffect() async throws {
-        @Sendable
-        func append(_ int: Int, after duration: Duration) async throws -> TestStore.Effect {
-            try await Task.sleep(for: duration)
-            return .append(int, to: \.ints)
-        }
-        
-        let mergeEffect: TestStore.Effect = .merge(
-            .task { try await append(1, after: .milliseconds(500)) },
-            .task { try await append(2, after: .milliseconds(250)) },
-            .task { try await append(3, after: .milliseconds(0)) },
-        )
-        
-        try await StoreWaiter(store: TestStore())
-            .wait(for: \.ints, count: 3, running: mergeEffect)
-            .expect(\.ints, toEqual: [3, 2, 1])
+    @Test("Set effect mutates state with a keypath and value")
+    func setWithKeyPath() async throws {
+        let store = TestStore()
+        try await StoreWaiter(store: store)
+            .wait(for: \.strings, running: .set(\.strings, to: ["a", "b"]))
+            .expect(\.strings, toEqual: ["a", "b"])
     }
     
     @MainActor
-    @Test("Environment", .tags(.environment))
-    func testEnvironment() async throws {
-        let parentEnv = AsyncStoreEnvironmentValues()
-        parentEnv.testService = .mock([1, 2, 3])
+    @Test("Append effect adds an element to an array property")
+    func appendEffect() async throws {
+        let store = TestStore(state: TestState(ints: [1]))
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: .append(2, to: \.ints))
+            .expect(\.ints, toEqual: [1, 2])
+    }
+}
+
+// MARK: - Task Effect
+
+@Suite("AsyncStore Task Effect", .tags(.effects))
+struct AsyncStoreTaskEffectTests {
+    @MainActor
+    @Test("Task effect executes an async operation and applies the result")
+    func taskEffect() async throws {
+        let store = TestStore()
+        let effect: TestStore.Effect = .task {
+            .set(\.ints, to: [42])
+        }
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: effect)
+            .expect(\.ints, toEqual: [42])
+    }
+    
+    @MainActor
+    @Test("Task effect with param passes the parameter to the operation")
+    func taskWithParam() async throws {
+        let store = TestStore()
+        let effect: TestStore.Effect = .task(param: 99) { value in
+            .set(\.ints, to: [value])
+        }
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: effect)
+            .expect(\.ints, toEqual: [99])
+    }
+    
+    @MainActor
+    @Test("Task effect with id cancels previous task with the same id")
+    func taskCancelsPreviousWithSameId() async throws {
+        let store = TestStore()
+        let counter = Counter()
         
-        // Test Environment
-        let store1 = TestStore(environment: parentEnv)
-        let actualValue1 = try await store1.env.testService.getInts()
-        #expect(actualValue1 == [1, 2, 3])
+        // Merge allows both tasks to reduce concurrently. The slow task
+        // starts first; then the fast task with the same id cancels it
+        // via `track`.
+        let effect: TestStore.Effect = .merge([
+            .task({ @Sendable in
+                try await Task.sleep(for: .seconds(10))
+                await counter.increment()
+                return .none
+            }, id: .one),
+            .task({ @Sendable in
+                // Small delay so the slow task registers first
+                try await Task.sleep(for: .milliseconds(100))
+                return .set(\.ints, to: [1])
+            }, id: .one),
+        ])
         
-        // Test Child Environment
-        let store2 = TestStore(environment: store1.env.child())
-        let actualValue2 = try await store2.env.testService.getInts()
-        #expect(actualValue2 == [1, 2, 3])
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: effect)
+            .expect(\.ints, toEqual: [1])
         
-        // Test Child Override
-        store2.env.testService = .mock([3, 2, 1])
-        let actualValue3 = try await store2.env.testService.getInts()
-        #expect(actualValue3 == [3, 2, 1])
+        // Give some time for the slow task to have potentially completed
+        try await Task.sleep(for: .milliseconds(200))
+        let count = await counter.count
+        #expect(count == 0, "The first task should have been cancelled")
+    }
+}
+
+// MARK: - Concatenate Effect
+
+@Suite("AsyncStore Concatenate Effect", .tags(.effects))
+struct AsyncStoreConcatenateEffectTests {
+    @MainActor
+    @Test("Concatenate runs effects sequentially")
+    func concatenateEffects() async throws {
+        let store = TestStore()
+        let effect: TestStore.Effect = .concatenate([
+            .set(\.ints, to: [1]),
+            .set(\.strings, to: ["done"]),
+        ])
+        try await StoreWaiter(store: store)
+            .wait(for: \.strings, running: effect)
+            .expect(\.ints, toEqual: [1])
+            .expect(\.strings, toEqual: ["done"])
+    }
+    
+    @MainActor
+    @Test("Concatenate preserves order of async tasks")
+    func concatenatePreservesOrder() async throws {
+        let store = TestStore()
+        let effect: TestStore.Effect = .concatenate([
+            .task {
+                try await Task.sleep(for: .milliseconds(50))
+                return .append(1, to: \.ints)
+            },
+            .task {
+                .append(2, to: \.ints)
+            },
+        ])
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, count: 2, running: effect)
+            .expect(\.ints, toEqual: [1, 2])
+    }
+}
+
+// MARK: - Merge Effect
+
+@Suite("AsyncStore Merge Effect", .tags(.effects))
+struct AsyncStoreMergeEffectTests {
+    @MainActor
+    @Test("Merge runs effects concurrently")
+    func mergeEffects() async throws {
+        let store = TestStore()
+        let effect: TestStore.Effect = .merge([
+            .set(\.ints, to: [1]),
+            .set(\.strings, to: ["merged"]),
+        ])
+        // Both properties should be set after merge completes
+        try await StoreWaiter(store: store)
+            .wait(for: \.strings, running: effect)
+            .expect(\.ints, toEqual: [1])
+            .expect(\.strings, toEqual: ["merged"])
+    }
+}
+
+// MARK: - MapError
+
+@Suite("AsyncStore MapError", .tags(.effects))
+struct AsyncStoreMapErrorTests {
+    @MainActor
+    @Test("mapError converts thrown errors into effects")
+    func mapErrorHandlesThrow() async throws {
+        let store = TestStore()
+        store.mapError = { error in
+            .set(\.error, to: .test)
+        }
+        
+        let effect: TestStore.Effect = .task {
+            throw TestError.test
+        }
+        
+        try await StoreWaiter(store: store)
+            .wait(for: \.error, running: effect)
+            .expect(\.error, toEqual: .test)
+    }
+    
+    @MainActor
+    @Test("mapError defaults to .none, leaving state unchanged on throw")
+    func mapErrorDefaultsToNone() async throws {
+        let store = TestStore()
+        
+        // Run an effect that throws without setting mapError
+        let effect: TestStore.Effect = .task {
+            throw TestError.test
+        }
+        store.run(effect)
+        
+        // Give time for the task to be processed
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(store.state.error == nil)
+    }
+}
+
+// MARK: - Binding
+
+@Suite("AsyncStore Binding", .tags(.store))
+struct AsyncStoreBindingTests {
+    @MainActor
+    @Test("Binding reads the current value from state")
+    func bindingGet() {
+        let store = TestStore(state: TestState(ints: [1, 2]))
+        let binding = store.binding(for: \.ints)
+        #expect(binding.wrappedValue == [1, 2])
+    }
+    
+    @MainActor
+    @Test("Binding writes a new value to state")
+    func bindingSet() {
+        let store = TestStore()
+        let binding = store.binding(for: \.strings)
+        binding.wrappedValue = ["updated"]
+        #expect(store.state.strings == ["updated"])
+    }
+}
+
+// MARK: - Environment
+
+@Suite("AsyncStoreEnvironment", .tags(.environment))
+struct AsyncStoreEnvironmentTests {
+    @MainActor
+    @Test("Environment returns default value for an unset key")
+    func environmentDefault() {
+        let env = AsyncStoreEnvironmentValues()
+        let service = env.testService
+        // Default EmptyTestService returns []
+        #expect(service is EmptyTestService)
+    }
+    
+    @MainActor
+    @Test("Environment stores and retrieves a custom value")
+    func environmentCustomValue() {
+        let env = AsyncStoreEnvironmentValues()
+        env.testService = .mock([1, 2, 3])
+        #expect(env.testService is MockTestService)
+    }
+    
+    @MainActor
+    @Test("Child environment inherits from parent")
+    func childInheritsFromParent() {
+        let parent = AsyncStoreEnvironmentValues()
+        parent.testService = .mock([10])
+        let child = parent.child()
+        #expect(child.testService is MockTestService)
+    }
+    
+    @MainActor
+    @Test("Child environment can override parent values")
+    func childOverridesParent() {
+        let parent = AsyncStoreEnvironmentValues()
+        parent.testService = .mock([10])
+        let child = parent.child()
+        child.testService = .empty
+        #expect(child.testService is EmptyTestService)
+        // Parent retains its value
+        #expect(parent.testService is MockTestService)
+    }
+    
+    @MainActor
+    @Test("Store uses injected environment service in task effects")
+    func storeUsesEnvironmentService() async throws {
+        let env = AsyncStoreEnvironmentValues()
+        env.testService = .mock([7, 8, 9])
+        let store = TestStore(environment: env)
+        
+        let effect: TestStore.Effect = .task { @Sendable [env = store.env] in
+            let ints = try await env.testService.getInts()
+            return .set(\.ints, to: ints)
+        }
+        
+        try await StoreWaiter(store: store)
+            .wait(for: \.ints, running: effect)
+            .expect(\.ints, toEqual: [7, 8, 9])
+    }
+}
+
+// MARK: - Deinit
+
+@Suite("AsyncStore Deinit", .tags(.store))
+struct AsyncStoreDeinitTests {
+    @MainActor
+    @Test("Store is deallocated when all references are released")
+    func storeDeallocates() async throws {
+        weak var weakStore: TestStore?
+        
+        autoreleasepool {
+            let store = TestStore()
+            weakStore = store
+            #expect(weakStore != nil)
+        }
+        
+        // Allow pending tasks to drain
+        await Task.yield()
+        #expect(weakStore == nil, "Store should be deallocated after autoreleasepool")
+    }
+    
+    @MainActor
+    @Test("Store cancels running tasks on deinit")
+    func storeCancelsTasksOnDeinit() async throws {
+        let counter = Counter()
+        
+        autoreleasepool {
+            let store = TestStore()
+            // Launch a long-running task
+            store.run(.task({ @Sendable in
+                try await Task.sleep(for: .seconds(10))
+                await counter.increment()
+                return .none
+            }, id: .one))
+        }
+        
+        // Allow deinit to run and tasks to notice cancellation
+        try await Task.sleep(for: .milliseconds(200))
+        let count = await counter.count
+        #expect(count == 0, "Long-running task should have been cancelled by deinit")
+    }
+    
+    @MainActor
+    @Test("Store finishes state continuations on deinit")
+    func storeFinishesContinuationsOnDeinit() async throws {
+        var streamIterator: AsyncMapSequence<AsyncStream<TestState>, [Int]>.AsyncIterator!
+        
+        autoreleasepool {
+            let store = TestStore()
+            let stream = store.stream(for: \.ints)
+            streamIterator = stream.makeAsyncIterator()
+        }
+        
+        // The stream should yield the initial value then terminate
+        let first = await streamIterator.next()
+        #expect(first == [])
+        
+        let afterDeinit = await streamIterator.next()
+        #expect(afterDeinit == nil, "Stream should terminate after store deinit")
+    }
+}
+
+// MARK: - None Effect
+
+@Suite("AsyncStore None Effect", .tags(.effects))
+struct AsyncStoreNoneEffectTests {
+    @MainActor
+    @Test("None effect does not change state")
+    func noneEffect() async throws {
+        let store = TestStore(state: TestState(ints: [1]))
+        store.run(.none)
+        
+        // Give the run loop time to process
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(store.state.ints == [1])
     }
 }

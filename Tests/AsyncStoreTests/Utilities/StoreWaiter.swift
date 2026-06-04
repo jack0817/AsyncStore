@@ -5,7 +5,7 @@
 //  Created by Wendell Thompson on 4/1/26.
 //
 
-import AsyncStore
+@testable import AsyncStore
 import Foundation
 import Testing
 

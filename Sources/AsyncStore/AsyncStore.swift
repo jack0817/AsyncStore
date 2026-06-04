@@ -16,7 +16,7 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     public fileprivate(set) var state: State
     
     @ObservationIgnored
-    public var mapError: (@Sendable (any Error) -> Effect)? = .none
+    public var mapError: (@Sendable (any Error) -> Effect) = { _ in .none }
     
     @ObservationIgnored
     private var runContinuation: AsyncStream<Effect>.Continuation? = .none
@@ -28,12 +28,13 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
     private var tasks: [TaskIdentifier: Task<Effect, Never>] = [:]
     
     @ObservationIgnored
-    private var stateContinuations: [UUID: AsyncStream<State>.Continuation] = [:]
+    private var repoTasks: [Int: Task<Void, Never>] = [:]
+    
+    @ObservationIgnored
+    private var stateContinuations: [AsyncStream<State>.Continuation] = []
     
     @ObservationIgnored
     public let env: AsyncStoreEnvironmentValues
-    
-    public var repo: AsyncStoreRepository { .shared }
     
     public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
         self.state = state
@@ -51,23 +52,27 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         }
     }
     
-    deinit {
+    isolated deinit {
         runContinuation?.finish()
         runTask?.cancel()
         tasks.values.forEach { $0.cancel() }
-        stateContinuations.values.forEach { $0.finish() }
-        print("[\(String(reflecting: Self.self))] deinit")
+        stateContinuations.forEach { $0.finish() }
+        unbindAll()
     }
     
     public subscript<Value>(dynamicMember property: KeyPath<State, Value>) -> Value {
         get { state[keyPath: property] }
     }
-    
-    public func run(_ effect: Effect) {
+}
+
+// MARK: Public API
+
+public extension AsyncStore {
+    func run(_ effect: Effect) {
         runContinuation?.yield(effect)
     }
     
-    public func binding<Value: Sendable & Equatable>(
+    func binding<Value: Sendable & Equatable>(
         for property: WritableKeyPath<State, Value>
     ) -> Binding<Value> {
         let defaultValue = state[keyPath: property]
@@ -80,56 +85,124 @@ public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendab
         )
     }
     
-    public func stream<Value: Equatable & Sendable>(
+    func bind<Key: AsyncStoreRepositoryKey, Value: Equatable & Sendable>(
+        _ repoKey: Key.Type,
+        to keyPath: KeyPath<Key.State, Value>,
+        map: @escaping (Value) -> Effect
+    ) {
+        let stream = AsyncStoreRepository.shared[repoKey]
+            .stream(for: keyPath)
+            .removeDuplicates()
+        
+        let repoTask = Task { [weak self] in
+            for await value in stream {
+                let effect = map(value)
+                _ = await MainActor.run {
+                    self?.runContinuation?.yield(effect)
+                }
+            }
+        }
+        
+        let repoTaskId = repoTaskId(for: repoKey, keyPath: keyPath)
+        repoTasks[repoTaskId] = repoTask
+    }
+    
+    func repo<Key: AsyncStoreRepositoryKey, Value>(
+        for key: Key.Type,
+        _ keyPath: KeyPath<Key.State, Value>
+    ) -> Value {
+        AsyncStoreRepository.shared[key].state[keyPath: keyPath]
+    }
+}
+
+// MARK: Internal API
+
+internal extension AsyncStore {
+    func stream<Value: Equatable & Sendable>(
         for keyPath: KeyPath<State, Value>
-    ) -> AnyAsyncSequence<Value> {
+    ) ->  AsyncMapSequence<AsyncStream<State>, Value> {
         let stateStream = AsyncStream<State> { continuation in
-            stateContinuations[.init()] = continuation
+            stateContinuations.append(continuation)
             continuation.yield(state)
         }
         
-        return stateStream
-            .map { $0[keyPath: keyPath] }
-            .removeDuplicates()
-            .eraseToAnyAsyncSequence()
+        return stateStream.map { $0[keyPath: keyPath] }
     }
     
-    public func bind<Key: AsyncStoreRepositoryKey, Value: Sendable & Equatable>(
-        to repoKey: Key,
-        on property: KeyPath<Key.State, Value>,
-        map: @escaping (Value) -> Effect
-    ) {
-        let stream = AsyncStoreRepository.shared[Key.self]
-            .stream(for: property)
-            .removeDuplicates()
-        
-        Task { [weak self] in
-            for await value in stream {
-                guard !Task.isCancelled, let self else { return }
-                let effect = map(value)
-                self.run(effect)
-            }
-        }
-    }
-    
-    public func bind<OtherState, TaskId, Value: Sendable & Equatable>(
-        to storeKeyPath: KeyPath<AsyncStoreRepository, AsyncStore<OtherState, TaskId>>,
-        on property: KeyPath<OtherState, Value>,
-        map: @escaping (Value) -> Effect
-    ) {
-        let stream = AsyncStoreRepository.shared[keyPath: storeKeyPath]
-            .stream(for: property)
-            .removeDuplicates()
-        
-        Task { [weak self] in
-            for await value in stream {
-                guard !Task.isCancelled, let self else { return }
-                let effect = map(value)
-                self.run(effect)
-            }
-        }
+    func unbindAll() {
+        repoTasks.keys.forEach { repoTasks[$0]?.cancel() }
+        repoTasks.removeAll()
     }
 }
+
+// MARK: Private API
+
+fileprivate extension AsyncStore {
+    func perform(_ setter: (inout State) -> Void) {
+        setter(&_state)
+        yieldState()
+    }
+    
+    func execute(
+        _ operation: @Sendable @escaping () async throws -> Effect,
+        id: TaskIdentifier?
+    ) async -> Effect {
+        let opTask = Task.detached(priority: .background) {
+            do {
+                async let effectTask = operation()
+                return try await effectTask
+            } catch {
+                return await MainActor.run { [weak self] in
+                    self?.mapError(error) ?? .none
+                }
+            }
+        }
+        
+        track(opTask, id: id)
+        let effect = await opTask.value
+        unTrack(id: id)
+        return effect
+    }
+    
+    func track(_ task: Task<Effect, Never>, id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id]?.cancel()
+        tasks[id] = task
+    }
+    
+    func unTrack(id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id] = .none
+    }
+    
+    func yieldState() {
+        var activeContinuations: [AsyncStream<State>.Continuation] = []
+
+        stateContinuations.forEach { continuation in
+            switch continuation.yield(state) {
+            case .terminated:
+                return
+            default:
+                activeContinuations.append(continuation)
+            }
+        }
+        
+        stateContinuations = activeContinuations
+    }
+    
+    func repoTaskId<Key: AsyncStoreRepositoryKey, Value>(
+        for key: Key.Type,
+        keyPath: KeyPath<Key.State, Value>
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(ObjectIdentifier(self).hashValue)
+        hasher.combine(ObjectIdentifier(key).hashValue)
+        hasher.combine(keyPath.hashValue)
+        return hasher.finalize()
+    }
+}
+
+// MARK: Reduce
 
 fileprivate extension AsyncStore {
     func reduce(_ effect: Effect) async {
@@ -137,21 +210,10 @@ fileprivate extension AsyncStore {
         case .none:
             return
         case .set(let setter):
-            setter(&state)
-            yieldState()
+            perform(setter)
         case .task(let operation, let id):
-            let handleError = mapError ?? { _ in .none }
-            let task = Task.detached(priority: .background) {
-                do {
-                    async let effect = operation()
-                    return try await effect
-                } catch {
-                    return handleError(error)
-                }
-            }
-            track(task, id: id)
-            let effect = await task.value
-            await reduce(effect)
+            let effect = await execute(operation, id: id)
+            runContinuation?.yield(effect)
         case .concatenate(let effects):
             for effect in effects {
                 await reduce(effect)
@@ -165,30 +227,6 @@ fileprivate extension AsyncStore {
                     }
                 }
             }
-        }
-    }
-    
-    func track(_ task: Task<Effect, Never>, id: TaskIdentifier?) {
-        guard let id else { return }
-        tasks[id]?.cancel()
-        tasks[id] = task
-    }
-    
-    func yieldState() {
-        var terminatedIds: [UUID] = []
-
-        stateContinuations.forEach { id, continuation in
-            switch continuation.yield(state) {
-            case .terminated:
-                terminatedIds.append(id)
-            default:
-                break
-            }
-        }
-        
-        terminatedIds.forEach { id in
-            stateContinuations[id]?.finish()
-            stateContinuations[id] = .none
         }
     }
 }
