@@ -6,6 +6,7 @@ extension Tag {
     @Tag static var store: Self
     @Tag static var effects: Self
     @Tag static var environment: Self
+    @Tag static var repository: Self
 }
 
 // MARK: - Initialization
@@ -395,5 +396,309 @@ struct AsyncStoreNoneEffectTests {
         // Give the run loop time to process
         try await Task.sleep(for: .milliseconds(100))
         #expect(store.state.ints == [1])
+    }
+}
+
+// MARK: - Repository
+
+@Suite("AsyncStore Repository", .tags(.repository), .serialized)
+struct AsyncStoreRepositoryTests {
+    @MainActor
+    @Test("Repo - Read value from repository")
+    func repoReadValue() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1, 2, 3], strings: ["A", "B"]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store that reads from repo
+        let consumerStore = TestStore()
+        
+        // Read values from repository
+        let ints = consumerStore.repo(for: TestStoreRepositoryKey.self, \.ints)
+        let strings = consumerStore.repo(for: TestStoreRepositoryKey.self, \.strings)
+        
+        #expect(ints == [1, 2, 3])
+        #expect(strings == ["A", "B"])
+    }
+    
+    @MainActor
+    @Test("Repo - Read value after repository update")
+    func repoReadAfterUpdate() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store
+        let consumerStore = TestStore()
+        
+        // Read initial value
+        let initialValue = consumerStore.repo(for: TestStoreRepositoryKey.self, \.ints)
+        #expect(initialValue == [1])
+        
+        // Update repository
+        repoStore.run(.set(\.ints, to: [10, 20, 30]))
+        
+        // Wait for state to settle
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Read updated value
+        let updatedValue = consumerStore.repo(for: TestStoreRepositoryKey.self, \.ints)
+        #expect(updatedValue == [10, 20, 30])
+    }
+    
+    @MainActor
+    @Test("Bind - React to repository changes")
+    func bindAndReactToChanges() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store that binds to repo
+        let consumerStore = TestStore()
+        
+        // Bind repo changes to consumer store
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { newInts in
+                .set(\.strings, to: newInts.map(String.init))
+            }
+        )
+        
+        // Wait for binding to establish
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Update repository store
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.strings, running: { _ in
+                repoStore.run(.set(\.ints, to: [1, 2, 3]))
+            })
+            .expect(\.strings, toEqual: ["1", "2", "3"])
+    }
+    
+    @MainActor
+    @Test("Bind - Multiple consumers to same repository")
+    func bindMultipleConsumers() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [10], strings: ["X"]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create two consumer stores
+        let consumer1 = TestStore()
+        let consumer2 = TestStore()
+        
+        // Bind both consumers to different properties
+        consumer1.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { .set(\.ints, to: $0) }
+        )
+        
+        consumer2.bind(
+            TestStoreRepositoryKey.self,
+            to: \.strings,
+            map: { .set(\.strings, to: $0) }
+        )
+        
+        // Wait for bindings to establish
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Update repository - both consumers should react
+        try await StoreWaiter(store: consumer1)
+            .wait(for: \.ints, running: { _ in
+                repoStore.run(.set(\.ints, to: [20, 30]))
+            })
+            .expect(\.ints, toEqual: [20, 30])
+        
+        try await StoreWaiter(store: consumer2)
+            .wait(for: \.strings, running: { _ in
+                repoStore.run(.set(\.strings, to: ["Y", "Z"]))
+            })
+            .expect(\.strings, toEqual: ["Y", "Z"])
+    }
+    
+    @MainActor
+    @Test("Bind - Transform mapped values")
+    func bindWithTransform() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1, 2, 3]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store
+        let consumerStore = TestStore()
+        
+        // Bind repo with a transformation (sum of ints)
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { ints in
+                let sum = ints.reduce(0, +)
+                return .set(\.ints, to: [sum])
+            }
+        )
+        
+        // Wait for binding to establish
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Update repository store
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.ints, running: { _ in
+                repoStore.run(.set(\.ints, to: [5, 10, 15]))
+            })
+            .expect(\.ints, toEqual: [30])
+    }
+    
+    @MainActor
+    @Test("Bind - Filters duplicate values")
+    func bindFiltersDuplicates() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store with a counter
+        let consumerStore = TestStore()
+        let counter = Counter()
+        
+        // Bind repo and count updates
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { ints in
+                Task { await counter.increment() }
+                return .set(\.ints, to: ints)
+            }
+        )
+        
+        // Wait for binding to establish
+        try await Task.sleep(for: .milliseconds(50))
+        let initialCount = await counter.count
+        
+        // Update with same value multiple times
+        repoStore.run(.set(\.ints, to: [1]))
+        try await Task.sleep(for: .milliseconds(50))
+        repoStore.run(.set(\.ints, to: [1]))
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Should not trigger additional updates due to removeDuplicates()
+        let afterDuplicatesCount = await counter.count
+        #expect(afterDuplicatesCount == initialCount)
+        
+        // Update with different value
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.ints, running: { _ in
+                repoStore.run(.set(\.ints, to: [2]))
+            })
+        
+        // Should trigger exactly one more update
+        let finalCount = await counter.count
+        #expect(finalCount == initialCount + 1)
+    }
+    
+    @MainActor
+    @Test("Bind - Multiple bindings on same consumer")
+    func bindMultipleProperties() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1], strings: ["A"]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store
+        let consumerStore = TestStore()
+        
+        // Bind multiple properties from the same repo
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { .set(\.ints, to: $0) }
+        )
+        
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.strings,
+            map: { .set(\.strings, to: $0) }
+        )
+        
+        // Wait for bindings to establish
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Update both properties
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.ints, running: { _ in
+                repoStore.run(.set(\.ints, to: [10, 20]))
+            })
+            .expect(\.ints, toEqual: [10, 20])
+        
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.strings, running: { _ in
+                repoStore.run(.set(\.strings, to: ["X", "Y", "Z"]))
+            })
+            .expect(\.strings, toEqual: ["X", "Y", "Z"])
+    }
+    
+    @MainActor
+    @Test("Bind - Chain effects from repository")
+    func bindChainEffects() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        // Create a consumer store
+        let consumerStore = TestStore()
+        
+        // Bind with effect chaining
+        consumerStore.bind(
+            TestStoreRepositoryKey.self,
+            to: \.ints,
+            map: { ints in
+                .concatenate([
+                    .set(\.ints, to: ints),
+                    .set(\.strings, to: ints.map { "Value: \($0)" })
+                ])
+            }
+        )
+        
+        // Wait for binding to establish
+        try await Task.sleep(for: .milliseconds(50))
+        
+        // Update repository
+        try await StoreWaiter(store: consumerStore)
+            .wait(for: \.ints, count: 1, running: { _ in
+                repoStore.run(.set(\.ints, to: [100, 200]))
+            })
+        
+        // Wait for concatenated effects to complete
+        try await Task.sleep(for: .milliseconds(100))
+        
+        #expect(consumerStore.state.ints == [100, 200])
+        #expect(consumerStore.state.strings == ["Value: 100", "Value: 200"])
+    }
+    
+    @MainActor
+    @Test("Bind - Consumer deinit cleans up binding")
+    func bindCleanupOnDeinit() async throws {
+        // Set up repository store
+        let repoStore = TestStore(state: TestState(ints: [1]))
+        AsyncStoreRepository.shared.testStore = repoStore
+        
+        weak var weakConsumer: TestStore?
+        
+        autoreleasepool {
+            let consumerStore = TestStore()
+            weakConsumer = consumerStore
+            
+            // Bind consumer to repository
+            consumerStore.bind(
+                TestStoreRepositoryKey.self,
+                to: \.ints,
+                map: { .set(\.ints, to: $0) }
+            )
+            
+            #expect(weakConsumer != nil)
+        }
+        
+        // Allow time for cleanup
+        try await Task.sleep(for: .milliseconds(100))
+        
+        // Consumer should be deallocated
+        try #require(weakConsumer == nil, "Consumer should be deallocated after autoreleasepool")
     }
 }

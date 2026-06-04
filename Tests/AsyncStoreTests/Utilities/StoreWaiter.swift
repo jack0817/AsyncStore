@@ -56,7 +56,7 @@ public final class StoreWaiter<State: Sendable, TaskId: Hashable & Sendable> {
         }
         
         updateTask = Task {
-            let updateStream = store.stream(for: property).dropFirst()
+            let updateStream = store.stream(for: property).dropFirst().removeDuplicates()
             var updateCount = 0
             
             for await _ in updateStream {
@@ -88,7 +88,7 @@ public final class StoreWaiter<State: Sendable, TaskId: Hashable & Sendable> {
     ) -> Self {
         expect(
             { $0[keyPath: property] == value },
-            comment: comment ?? "Store property '\(property)' did not equal \(value)",
+            comment: comment ?? "Store property '\(property)' did not equal \(value), actual:\(store.state[keyPath: property])",
             sourceLocation: sourceLocation
         )
     }
