@@ -1,349 +1,232 @@
 //
 //  AsyncStore.swift
+//  AsyncStore
 //
-//
-//  Created by Wendell Thompson (AO) on 2/14/22.
+//  Created by Wendell Thompson on 12/15/25.
 //
 
+import AsyncAlgorithms
 import Foundation
-import Combine
 import SwiftUI
-import Atomics
 
-// MARK: Store
-
+@Observable
+@MainActor
 @dynamicMemberLookup
-public final class AsyncStore<State, Environment>: ObservableObject {
-    fileprivate var _state: State
-    private let _env: Environment
-    private let _mapError: (Error) -> Effect
+public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
+    public fileprivate(set) var state: State
     
-    private var receiveContinuation: AsyncStream<Effect>.Continuation? = .none
-    private var receiveTask: Task<Void, Never>? = .none
-    private let cancelStore = AsyncCancelStore()
-    private let stateDistributor = AsyncDistributor<State>()
+    @ObservationIgnored
+    public var mapError: (@Sendable (any Error) -> Effect) = { _ in .none }
     
-    private let stateChangedSubject = PassthroughSubject<Void, Never>()
-    private var stateChangedSubscription: AnyCancellable? = .none
-    private let _isActive = ManagedAtomic<Bool>(false)
-    private var logTag: String { "[\(type(of: self))]" }
+    @ObservationIgnored
+    private var runContinuation: AsyncStream<Effect>.Continuation? = .none
     
-    public init(state: State, env: Environment, mapError: @escaping (Error) -> Effect) {
-        self._state = state
-        self._env = env
-        self._mapError = mapError
-        self.activate()
-    }
+    @ObservationIgnored
+    private var runTask: Task<Void, Never>? = .none
     
-    deinit {
-        stateChangedSubscription?.cancel()
-        receiveContinuation?.finish()
-        receiveTask?.cancel()
-        stateDistributor.finishAll()
-        cancelStore.cancellAll()
-    }
+    @ObservationIgnored
+    private var tasks: [TaskIdentifier: Task<Effect, Never>] = [:]
     
-    public var isActive: Bool {
-        _isActive.load(ordering: .sequentiallyConsistent)
-    }
+    @ObservationIgnored
+    private var repoTasks: [Int: Task<Void, Never>] = [:]
     
-    public var state: State {
-        get { _state }
-    }
+    @ObservationIgnored
+    private var stateContinuations: [AsyncStream<State>.Continuation] = []
     
-    public var env: Environment {
-        get { _env }
-    }
+    @ObservationIgnored
+    public let env: AsyncStoreEnvironmentValues
     
-    public subscript <Value>(dynamicMember dynamicMember: KeyPath<State, Value>) -> Value {
-        get { _state[keyPath: dynamicMember] }
-    }
-    
-    public func activate() {
-        stateChangedSubscription?.cancel()
-        stateChangedSubscription = stateChangedSubject
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
+    public init(state: State, environment: AsyncStoreEnvironmentValues = .shared) {
+        self.state = state
+        self.env = environment
         
-        receiveContinuation?.finish()
-        let stream = AsyncStream<Effect>(
-            Effect.self,
-            bufferingPolicy: .unbounded
-        ) { continuation in
-            self.receiveContinuation = continuation
+        let runStream = AsyncStream<Effect> { continuation in
+            self.runContinuation = continuation
         }
         
-        receiveTask?.cancel()
-        receiveTask = Task {
-            for await effect in stream {
-                await reduce(effect)
+        runTask = Task(priority: .background) { [weak self] in
+            for await effect in runStream {
+                guard !Task.isCancelled, let self else { break }
+                await self.reduce(effect)
             }
         }
-        
-        setIsActive(to: true)
     }
     
-    public func deactivate() {
-        receiveTask?.cancel()
-        stateDistributor.finishAll()
-        cancelStore.cancellAll()
-        setIsActive(to: false)
-        AsyncStoreLog.debug("\(logTag) deactivated")
+    isolated deinit {
+        runContinuation?.finish()
+        runTask?.cancel()
+        tasks.values.forEach { $0.cancel() }
+        stateContinuations.forEach { $0.finish() }
+        unbindAll()
     }
     
-    public func receive(_ effect: Effect) {
-        guard _isActive.load(ordering: .sequentiallyConsistent) else {
-            AsyncStoreLog.warning("\(logTag) is deactivated")
-            return
-        }
-        
-        checkMainThread("\(logTag) 'receive' should only be called from the main thread")
-
-        let result = receiveContinuation?.yield(effect)
-        switch result {
-        case .dropped(let effect):
-            AsyncStoreLog.warning("\(logTag) dropped received effect \(effect)")
-        case .terminated:
-            AsyncStoreLog.warning("\(logTag) stream terminated")
-        default:
-            break
-        }
-    }
-    
-    public func binding<Value>(for keyPath: WritableKeyPath<State, Value>) -> Binding<Value> {
-        let defaultValue = _state[keyPath: keyPath]
-        return .init(
-            get: { [weak self] in
-                guard let self = self else { return defaultValue }
-                return self._state[keyPath: keyPath]
-            },
-            set: { [weak self] value in
-                guard let self = self else { return }
-                self.objectWillChange { $0[keyPath: keyPath] = value }
-            }
-        )
-    }
-    
-    public func stream<Value: Equatable>(
-        for id: AnyHashable,
-        at keyPath: KeyPath<State, Value>,
-        bufferingPolicy: AsyncDistributor<State>.BufferingPolicy = .unbounded
-    ) -> AnyAsyncSequence<Value> {
-        stateDistributor.stream(
-            for: id,
-            initialValue: state,
-            bufferingPolicy: bufferingPolicy
-        )
-        .map{ $0[keyPath: keyPath] }
-        .removeDuplicates()
-        .eraseToAnyAsyncSequence()
+    public subscript<Value>(dynamicMember property: KeyPath<State, Value>) -> Value {
+        get { state[keyPath: property] }
     }
 }
 
-// MARK: Reducer
+// MARK: Public API
 
-extension AsyncStore {
-    private func reduce(_ effect: Effect, awaitTask: Bool = false) async {
-        processWarnings(for: effect)
+public extension AsyncStore {
+    func run(_ effect: Effect) {
+        runContinuation?.yield(effect)
+    }
+    
+    func binding<Value: Sendable & Equatable>(
+        for property: WritableKeyPath<State, Value>
+    ) -> Binding<Value> {
+        let defaultValue = state[keyPath: property]
+        return .init(
+            get: { [weak self] in self?.state[keyPath: property] ?? defaultValue },
+            set: { [weak self] in
+                self?.state[keyPath: property] = $0
+                self?.yieldState()
+            }
+        )
+    }
+    
+    func bind<Key: AsyncStoreRepositoryKey, Value: Equatable & Sendable>(
+        _ repoKey: Key.Type,
+        to keyPath: KeyPath<Key.State, Value>,
+        map: @escaping (Value) -> Effect
+    ) {
+        let stream = AsyncStoreRepository.shared[repoKey]
+            .stream(for: keyPath)
+            .removeDuplicates()
         
-        switch effect {
-        case .none:
-            break
-        case .set(let setter):
-            await setOnMain(setter)
-        case .task(let operation, let id):
-            let task = Task {
-                let effect = await execute(operation)
-                await reduce(effect)
-            }
-            cancelStore.store(id, task: task)
-            guard awaitTask else { return }
-            await task.value
-        case .sleep(let time):
-            do {
-                try await Task.trySleep(for: time)
-            } catch let error {
-                let effect = _mapError(error)
-                await reduce(effect)
-            }
-        case .timer(let interval, let id, let mapEffect):
-            let timer = AsyncTimer(interval: interval)
-            let timerTask = Task {
-                for await date in timer {
-                    let effect = mapEffect(date)
-                    await reduce(effect)
+        let repoTask = Task { [weak self] in
+            for await value in stream {
+                let effect = map(value)
+                _ = await MainActor.run {
+                    self?.runContinuation?.yield(effect)
                 }
-            }
-            cancelStore.store(id, task: timerTask)
-        case .debounce(let operation, let id, let delay):
-            let parentTask: Task<Task<Void, Never>, Never> = Task {
-                Task {
-                    let effect = await execute {
-                        try await Task.trySleep(for: delay)
-                        return try await operation()
-                    }
-                    await reduce(effect)
-                }
-            }
-            let debounceTask = await parentTask.value
-            cancelStore.store(id, task: debounceTask)
-            guard awaitTask else { return }
-            await debounceTask.value
-        case .cancel(let id):
-            cancelStore.cancel(id)
-        case .merge(let effects):
-            let mergeStream = AsyncStream<Void> { cont in
-                effects.forEach { effect in
-                    Task {
-                        await reduce(effect)
-                        cont.yield(())
-                    }
-                }
-            }
-            
-            var mergeCount = 0
-            for await _ in mergeStream {
-                mergeCount += 1
-                guard mergeCount < effects.count else { break }
-            }
-        case .concatenate(let effects):
-            for effect in effects {
-                await reduce(effect, awaitTask: true)
             }
         }
+        
+        let repoTaskId = repoTaskId(for: repoKey, keyPath: keyPath)
+        repoTasks[repoTaskId] = repoTask
+    }
+    
+    func repo<Key: AsyncStoreRepositoryKey, Value>(
+        for key: Key.Type,
+        _ keyPath: KeyPath<Key.State, Value>
+    ) -> Value {
+        AsyncStoreRepository.shared[key].state[keyPath: keyPath]
+    }
+}
+
+// MARK: Internal API
+
+internal extension AsyncStore {
+    func stream<Value: Equatable & Sendable>(
+        for keyPath: KeyPath<State, Value>
+    ) ->  AsyncMapSequence<AsyncStream<State>, Value> {
+        let stateStream = AsyncStream<State> { continuation in
+            stateContinuations.append(continuation)
+            continuation.yield(state)
+        }
+        
+        return stateStream.map { $0[keyPath: keyPath] }
+    }
+    
+    func unbindAll() {
+        repoTasks.keys.forEach { repoTasks[$0]?.cancel() }
+        repoTasks.removeAll()
     }
 }
 
 // MARK: Private API
 
 fileprivate extension AsyncStore {
-    func execute(_ operation: () async throws -> Effect) async -> Effect {
-        do {
-            return try await operation()
-        } catch let error {
-            return _mapError(error)
-        }
-    }
-    
-    @MainActor func setOnMain(_ setter: @escaping (inout State) -> Void) async {
-        objectWillChange(setter)
-    }
-    
-    func objectWillChange(_ setter: @escaping (inout State) -> Void) {
-        stateChangedSubject.send()
+    func perform(_ setter: (inout State) -> Void) {
         setter(&_state)
-        stateDistributor.yield(_state)
+        yieldState()
     }
     
-    func downstream(for id: AnyHashable) -> AsyncStream<State> {
-        stateDistributor.stream(for: id, initialValue: _state, bufferingPolicy: .unbounded)
-    }
-    
-    func checkMainThread(_ warningMessage: String) {
-        guard !Thread.current.isMainThread else { return }
-        AsyncStoreLog.warning(warningMessage)
-    }
-    
-    func processWarnings(for effect: Effect) {
-        switch effect {
-        case .concatenate(let effects) where effects.contains(where: { $0.isDebounce }):
-            AsyncStoreLog.warning("\(logTag) Concatenated debounce effects may not be debounced as they will be synchronized.")
-        default:
-            break
-        }
-    }
-    
-    func setIsActive(to isActive: Bool) {
-        let currentValue = _isActive.load(ordering: .sequentiallyConsistent)
-        guard currentValue != isActive else { return }
-        var isExchanged = false
-        while !isExchanged {
-            isExchanged = _isActive.compareExchange(
-                expected: currentValue,
-                desired: isActive,
-                ordering: .sequentiallyConsistent
-            ).exchanged
-        }
-    }
-}
-
-// MARK: Binding
-
-public extension AsyncStore {
-    func bind<Value>(
-        id: AnyHashable,
-        to keyPath: KeyPath<State, Value>,
-        mapEffect: @escaping (Value) -> Effect
-    ) where Value: Equatable {
-        let stream = downstream(for: id)
-            .map { $0[keyPath: keyPath] }
-        
-        bind(id: id, to: stream, mapEffect: mapEffect)
-    }
-    
-    func bind<UState, UEnv, Value>(
-        id: AnyHashable,
-        to upstreamStore: AsyncStore<UState, UEnv>,
-        on keyPath: KeyPath<UState, Value>,
-        mapEffect: @escaping (Value) -> Effect
-    ) where Value: Equatable {
-        let stream = upstreamStore
-            .downstream(for: id)
-            .map { $0[keyPath: keyPath] }
-        
-        bind(id: id, to: stream, mapEffect: mapEffect)
-    }
-    
-    func bind<Value, Stream: AsyncSequence>(
-        id: AnyHashable,
-        to stream: Stream,
-        mapEffect: @escaping (Value) -> Effect
-    ) where Value: Equatable, Stream.Element == Value{
-        guard _isActive.load(ordering: .sequentiallyConsistent) else {
-            AsyncStoreLog.warning("\(logTag) is deactivated")
-            return
-        }
-        
-        AsyncStoreLog.info("[\(type(of: self))] binding to id: \(id)")
-        let effectStream = stream.removeDuplicates()
-        
-        let bindTask = Task {
+    func execute(
+        _ operation: @Sendable @escaping () async throws -> Effect,
+        id: TaskIdentifier?
+    ) async -> Effect {
+        let opTask = Task.detached(priority: .background) {
             do {
-                for try await value in effectStream {
-                    let effect = mapEffect(value)
-                    await reduce(effect)
+                async let effectTask = operation()
+                return try await effectTask
+            } catch {
+                return await MainActor.run { [weak self] in
+                    self?.mapError(error) ?? .none
                 }
-            } catch let error {
-                let effect = _mapError(error)
-                await reduce(effect)
             }
         }
         
-        cancelStore.store(id, task: bindTask)
+        track(opTask, id: id)
+        let effect = await opTask.value
+        unTrack(id: id)
+        return effect
     }
-}
+    
+    func track(_ task: Task<Effect, Never>, id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id]?.cancel()
+        tasks[id] = task
+    }
+    
+    func unTrack(id: TaskIdentifier?) {
+        guard let id else { return }
+        tasks[id] = .none
+    }
+    
+    func yieldState() {
+        var activeContinuations: [AsyncStream<State>.Continuation] = []
 
-// MARK: Effect Extensions
-
-public extension AsyncStore {
-    func map<OtherState, OtherEnv>(_ effect: Effect) -> AsyncStore<OtherState, OtherEnv>.Effect {
-        .task { [weak self] in
-            guard let self = self else { return .none }
-            await self.reduce(effect)
-            return .none
+        stateContinuations.forEach { continuation in
+            switch continuation.yield(state) {
+            case .terminated:
+                return
+            default:
+                activeContinuations.append(continuation)
+            }
         }
+        
+        stateContinuations = activeContinuations
+    }
+    
+    func repoTaskId<Key: AsyncStoreRepositoryKey, Value>(
+        for key: Key.Type,
+        keyPath: KeyPath<Key.State, Value>
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(ObjectIdentifier(self).hashValue)
+        hasher.combine(ObjectIdentifier(key).hashValue)
+        hasher.combine(keyPath.hashValue)
+        return hasher.finalize()
     }
 }
 
-private extension AsyncStore.Effect {
-    var isDebounce: Bool {
-        switch self {
-        case .debounce:
-            return true
-        default:
-            return false
+// MARK: Reduce
+
+fileprivate extension AsyncStore {
+    func reduce(_ effect: Effect) async {
+        switch effect {
+        case .none:
+            return
+        case .set(let setter):
+            perform(setter)
+        case .task(let operation, let id):
+            let effect = await execute(operation, id: id)
+            runContinuation?.yield(effect)
+        case .concatenate(let effects):
+            for effect in effects {
+                await reduce(effect)
+            }
+        case .merge(let effects):
+            await withTaskGroup { group in
+                for effect in effects {
+                    group.addTask { @Sendable @MainActor [weak self] in
+                        guard !Task.isCancelled else { return }
+                        await self?.reduce(effect)
+                    }
+                }
+            }
         }
     }
 }
