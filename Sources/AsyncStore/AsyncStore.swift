@@ -139,7 +139,7 @@ internal extension AsyncStore {
 
 fileprivate extension AsyncStore {
     func perform(_ setter: (inout State) -> Void) {
-        setter(&_state)
+        setter(&state)
         yieldState()
     }
     
