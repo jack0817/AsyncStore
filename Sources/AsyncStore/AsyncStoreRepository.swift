@@ -12,6 +12,7 @@ import SwiftUI
 ///
 /// Conform to this protocol with an enum to declare the state and task identifier types
 /// of the shared store.
+@MainActor
 public protocol AsyncStoreRepositoryKey {
     /// The state type of the shared store.
     associatedtype State: Sendable
@@ -26,9 +27,9 @@ public protocol AsyncStoreRepositoryKey {
 /// Register stores at app launch and access them from any feature store using
 /// ``AsyncStore/repo(for:_:)`` for one-time reads or ``AsyncStore/bind(_:to:map:)``
 /// for reactive bindings.
+@MainActor
 public final class AsyncStoreRepository {
     /// The shared repository instance.
-    @MainActor
     public static let shared = AsyncStoreRepository()
     
     private var storage: [ObjectIdentifier: Any] = [:]
