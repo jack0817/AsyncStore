@@ -733,6 +733,8 @@ struct AsyncStoreRepositoryTests {
     }
 }
 
+// MARK: - Observability
+
 @Suite("AsyncStore Observability", .tags(.observability))
 struct AsyncStoreObservabilityTests {
     /// Creates a watchdog task that fails the test after the given timeout.
