@@ -21,7 +21,7 @@ struct ProfileState: Sendable, Equatable {
 
 ### Reading State
 
-AsyncStore supports `@dynamicMemberLookup`, so you can access state properties directly on the store:
+The ``AsyncStore/state`` property is read-only from outside the store. AsyncStore supports `@dynamicMemberLookup`, so you can access state properties directly on the store:
 
 ```swift
 let store = AsyncStore<ProfileState, Never>(state: ProfileState())
@@ -40,7 +40,7 @@ Image(systemName: store.avatarURL != nil ? "person.fill" : "person")
 
 ### Mutating State
 
-State can only be changed by dispatching effects. The simplest is ``AsyncStore/Effect/set(_:to:)``:
+Because ``AsyncStore/state`` is read-only, the only way to change it is by dispatching effects via ``AsyncStore/run(_:)``. The simplest is ``AsyncStore/Effect/set(_:to:)``:
 
 ```swift
 // Set a single property

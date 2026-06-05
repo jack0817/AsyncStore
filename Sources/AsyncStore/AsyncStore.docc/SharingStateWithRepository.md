@@ -8,7 +8,7 @@ While each ``AsyncStore`` manages its own local state, many apps need a way to s
 
 ### Define a Repository Key
 
-Create an enum conforming to ``AsyncStoreRepositoryKey`` that declares the shared store's state and task identifier types:
+Create an enum conforming to ``AsyncStoreRepositoryKey`` that declares the shared store's state and task identifier types. Both the protocol and ``AsyncStoreRepository`` are `@MainActor`-isolated, so your key and any convenience accessors must also be accessed from the main actor:
 
 ```swift
 struct SessionState: Sendable {
@@ -22,6 +22,7 @@ enum SessionTask: Hashable, Sendable {
     case login
 }
 
+@MainActor
 enum SessionStoreKey: AsyncStoreRepositoryKey {
     typealias State = SessionState
     typealias TaskIdentifier = SessionTask

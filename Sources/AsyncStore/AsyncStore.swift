@@ -26,7 +26,8 @@ import SwiftUI
 @MainActor
 @dynamicMemberLookup
 public final class AsyncStore<State: Sendable, TaskIdentifier: Hashable & Sendable> {
-    /// The current state value. Mutations trigger SwiftUI view updates.
+    /// The current state value (read-only). Mutations are only possible through effects
+    /// dispatched via ``run(_:)``, and each mutation triggers SwiftUI view updates.
     public fileprivate(set) var state: State
     
     /// A closure that maps errors thrown inside `.task` effects into new effects.
